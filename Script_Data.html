@@ -165,10 +165,8 @@ app.saveNewTopic = function() {
 app.deleteTopic = function(id, name) { if (confirm(`Xóa chủ đề: "${name}"? Mọi câu hỏi sẽ bị xóa!`)) google.script.run.withSuccessHandler(res => { alert(res.msg); app.loadDataAndRender(); }).xoaChuDe(id, app.accountID, app.currentPass); };
 
 app.closeStatsModal = function() { document.getElementById('modal-stats').style.display = 'none'; };
-app.openImportModal = function(id, name) { app.topicIdForAdd = id; document.getElementById('modal-import-latex').style.display = 'flex'; document.getElementById('import-title').innerText = `Thêm câu hỏi: ${name}`; };
-app.closeImportModal = function() { document.getElementById('modal-import-latex').style.display = 'none'; };
-app.processLatex = function() { let raw = document.getElementById('latex-input').value; let qs = app.parseLatex(raw); if(qs.length === 0) { alert("Không tìm thấy câu hỏi!"); return; } if(confirm(`Lưu ${qs.length} câu hỏi?`)) google.script.run.withSuccessHandler(res => { alert(res.msg); if(res.success) app.closeImportModal(); }).luuCauHoiTuLatex(app.topicIdForAdd, qs, app.accountID, app.currentPass); };
-app.parseLatex = function(text) { const regexEx = /\\begin\{ex\}([\s\S]*?)\\end\{ex\}/gm; let matches, results = []; function extractBracedContent(str) { let contents = [], current = "", depth = 0, started = false; for (let char of str) { if (char === '{') { if (depth === 0) started = true; depth++; if(depth===1) continue;} else if (char === '}') { depth--; if (depth === 0 && started) { contents.push(current); current = ""; started = false; continue; } } if (started) current += char; } return contents; } while ((matches = regexEx.exec(text)) !== null) { let content = matches[1], explain = ""; let idxLoigiai = content.indexOf('\\loigiai'); if (idxLoigiai !== -1) { let giaiData = content.substring(idxLoigiai).replace('\\loigiai', ''); let giaiArr = extractBracedContent(giaiData); if(giaiArr.length) explain = app.formatText(giaiArr[0].trim()); content = content.substring(0, idxLoigiai); } let parts = content.split(/\\choice/), qText = parts[0].trim(); qText = app.formatText(qText); if (parts.length < 2) continue; let cleanOpts = [], correct = ""; extractBracedContent(parts[1]).forEach(opt => { let val = opt.trim(); if (val.includes("\\True")) { val = val.replace("\\True", "").trim(); correct = app.formatText(val); } else { val = app.formatText(val); } if(val) cleanOpts.push(val); }); if(cleanOpts.length) { let finalCorrect = correct || cleanOpts[0]; results.push({ question: qText, options: cleanOpts, correct: finalCorrect, explain: explain }); } } return results; };
+app.openImportModal = function(id, name) { app.topicIdForAdd = id; if (app.qb && app.qbResetForm) { app.qb.topicId = id; app.qb.topicName = name; document.getElementById('qb-title').innerText = `Nhập Câu Hỏi cho Đề: ${name}`; document.getElementById('modal-question-builder').style.display = 'flex'; app.qbLoadLocal(); app.qbRenderTable(); app.qbResetForm(); return; } };
+app.closeImportModal = function() { var m = document.getElementById('modal-question-builder'); if (m) m.style.display = 'none'; };
 
 // --- ĐÃ SỬA: Hàm hiển thị thống kê (Dùng UID để xem chi tiết) ---
 app.viewStats = function(id, name) { 
@@ -179,7 +177,7 @@ app.viewStats = function(id, name) {
     app.currentStatsID = id; 
     google.script.run.withSuccessHandler(res => { 
         let contentDiv = document.getElementById('stats-content'); 
-        if (!res.success) { contentDiv.innerHTML = res.msg; return; } 
+        if (!res.success) { contentDiv.innerHTML = `<p style='color:#dc2626; text-align:center'>⚠️ ${res.msg}</p>`; return; } 
         app.currentStatsData = res.list; 
         
         // Vẽ Chart và các box thống kê (giữ nguyên)
@@ -198,6 +196,8 @@ app.viewStats = function(id, name) {
         html += `</tbody></table></div>`; 
         contentDiv.innerHTML = html; 
         app.renderChart(res.spectrum); 
+    }).withFailureHandler(err => {
+        document.getElementById('stats-content').innerHTML = `<p style='color:#dc2626; text-align:center'>❌ Lỗi kết nối: ${err.message}</p>`;
     }).layThongKe(id); 
 };
 
@@ -228,11 +228,33 @@ app.reviewStudentExam = function(maChuDe, userID, displayName, lanThu) {
         }); 
         div.innerHTML = html; 
         if(window.MathJax) MathJax.typesetPromise(); 
+    }).withFailureHandler(err => {
+        btn.innerText = originalText;
+        btn.disabled = false;
+        alert("❌ Lỗi tải bài làm: " + err.message);
     }).layChiTietBaiLamHocSinh(maChuDe, userID, lanThu); 
 };
 
 app.renderChart = function(dataArray) { if(app.myChart) { app.myChart.destroy(); } var ctx = document.getElementById('scoreChart').getContext('2d'); var gradient = ctx.createLinearGradient(0, 0, 0, 400); gradient.addColorStop(0, 'rgba(37, 99, 235, 0.5)'); gradient.addColorStop(1, 'rgba(37, 99, 235, 0.0)'); app.myChart = new Chart(ctx, { type: 'line', data: { labels: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'], datasets: [{ label: 'Số lượng bài thi', data: dataArray, borderColor: '#2563eb', backgroundColor: gradient, borderWidth: 3, pointBackgroundColor: '#fff', pointBorderColor: '#2563eb', pointRadius: 5, pointHoverRadius: 7, fill: true, tension: 0.4 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: '#f3f4f6' } }, x: { grid: { display: false } } }, plugins: { title: { display: true, text: 'PHỔ ĐIỂM CHI TIẾT', font: {size: 14} }, legend: { display: false }, tooltip: { mode: 'index', intersect: false } }, interaction: { mode: 'nearest', axis: 'x', intersect: false } } }); };
-app.exportToExcel = function() { if(!app.currentStatsData || app.currentStatsData.length === 0) { alert("Không có dữ liệu!"); return; } let csvContent = "\uFEFFNgày nộp,Họ và tên,Lần thi,Số câu đúng,Tổng số câu,Điểm (thang 10),Thời gian làm bài,Số lần thoát tab\n"; app.currentStatsData.forEach(row => { csvContent += `${row.ngay},"${row.ten}",${row.lan},${row.diem},${row.tongCau},${row.diem10},"${row.tgLam}",${row.viPham}\n`; }); let encodedUri = encodeURI("data:text/csv;charset=utf-8," + csvContent); let link = document.createElement("a"); link.setAttribute("href", encodedUri); let fileName = app.currentStatsName ? app.currentStatsName.replace(/\s+/g, '_') : "Thong_ke"; link.setAttribute("download", `Ket_qua_${fileName}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); };
+app.exportToExcel = function() {
+  if(!app.currentStatsData || app.currentStatsData.length === 0) { alert("Không có dữ liệu!"); return; }
+  let csvContent = "\uFEFFNgày nộp,Họ và tên,Lần thi,Số câu đúng,Tổng số câu,Điểm (thang 10),Thời gian làm bài,Số lần thoát tab\n";
+  app.currentStatsData.forEach(row => {
+    let name = String(row.ten || '').replace(/"/g, '""');
+    let tgLam = String(row.tgLam || '').replace(/"/g, '""');
+    csvContent += `${row.ngay},"${name}",${row.lan},${row.diem},${row.tongCau},${row.diem10},"${tgLam}",${row.viPham}\n`;
+  });
+  let blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  let url = URL.createObjectURL(blob);
+  let link = document.createElement("a");
+  link.href = url;
+  let fileName = app.currentStatsName ? app.currentStatsName.replace(/\s+/g, '_') : "Thong_ke";
+  link.download = `Ket_qua_${fileName}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+};
 app.processExportPDF = function() { if(!app.currentStatsID) return; let btn = document.getElementById('btn-export-pdf'); let originalText = btn.innerHTML; btn.disabled = true; btn.innerHTML = "⏳ Đang tạo PDF..."; google.script.run.withSuccessHandler(res => { btn.disabled = false; btn.innerHTML = originalText; if(res.success) { const linkSource = `data:application/pdf;base64,${res.data}`; const downloadLink = document.createElement("a"); downloadLink.href = linkSource; downloadLink.download = res.filename; downloadLink.click(); } else { alert(res.msg); } }).xuatPDF(app.currentStatsID); };
 app.toggleHistory = function(btn) { let p = btn.parentElement.nextElementSibling; if(p.style.maxHeight){ p.style.maxHeight=null; btn.innerHTML=btn.innerHTML.replace('▲','▼'); } else { p.style.maxHeight=p.scrollHeight+"px"; btn.innerHTML=btn.innerHTML.replace('▼','▲'); } };
 </script>

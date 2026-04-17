@@ -129,6 +129,34 @@ function thucHienQuayThuong(userID) {
   } catch (e) { return { success: false, msg: "Lỗi: " + e.toString() }; } finally { lock.releaseLock(); }
 }
 
+function normalizeTextCell(value) { return String(value == null ? "" : value).replace(/^'/, "").trim(); }
+function getQuestionRowData(row, rowIndex) {
+  if (!row) return null;
+  var topicCol0 = normalizeTextCell(row[0]);
+  var topicCol1 = normalizeTextCell(row[1]);
+  var isNewFormat = topicCol1 !== "" && normalizeTextCell(row[2]) !== "" && /^[A-E]$/i.test(normalizeTextCell(row[8]));
+  if (isNewFormat) {
+    var optionsMap = {
+      A: normalizeTextCell(row[3]), B: normalizeTextCell(row[4]), C: normalizeTextCell(row[5]),
+      D: normalizeTextCell(row[6]), E: normalizeTextCell(row[7])
+    };
+    var correctLetter = normalizeTextCell(row[8]).toUpperCase();
+    return {
+      rowIndex: rowIndex, format: "new", id: normalizeTextCell(row[0]) || ("Q_" + rowIndex), maChuDe: topicCol1,
+      question: normalizeTextCell(row[2]), options: [optionsMap.A, optionsMap.B, optionsMap.C, optionsMap.D, optionsMap.E],
+      correctLetter: correctLetter, correctText: optionsMap[correctLetter] || "", explanation: normalizeTextCell(row[9])
+    };
+  }
+  if (topicCol0 !== "" && normalizeTextCell(row[1]) !== "") {
+    return {
+      rowIndex: rowIndex, format: "old", id: "ROW_" + rowIndex, maChuDe: topicCol0, question: normalizeTextCell(row[1]),
+      options: [normalizeTextCell(row[2]), normalizeTextCell(row[3]), normalizeTextCell(row[4]), normalizeTextCell(row[5]), ""],
+      correctLetter: "", correctText: normalizeTextCell(row[6]), explanation: normalizeTextCell(row[7])
+    };
+  }
+  return null;
+}
+
 function suDungVatPham(userID, itemCode, currentQuestionID) {
   var lock = LockService.getScriptLock();
   try {
@@ -140,8 +168,8 @@ function suDungVatPham(userID, itemCode, currentQuestionID) {
           currentInv[itemCode]--; sheet.getRange(i + 1, 3).setValue(JSON.stringify(currentInv));
           var hintData = null;
           if ((itemCode === "help_5050" || itemCode === "check_true" || itemCode === "reveal_wrong") && currentQuestionID !== undefined) {
-             var qData = getData("CauHoi"); var row = qData[currentQuestionID]; 
-             if (row) { var correctText = String(row[6]).trim(); hintData = { ans: correctText }; }
+             var qData = getData("CauHoi"); var row = qData[currentQuestionID]; var questionData = getQuestionRowData(row, currentQuestionID);
+             if (questionData && questionData.correctText) hintData = { ans: questionData.correctText };
           }
           return { success: true, msg: "Đã sử dụng!", remaining: currentInv[itemCode], hint: hintData };
         } else { return { success: false, msg: "Hết vật phẩm!" }; }
@@ -165,15 +193,62 @@ function layDanhSachChuDe(userID) { var data = getData("ChuDe"); var userRole = 
 function themChuDeMoi(obj, reqID, reqPass) { if (!checkRole(reqID, reqPass, "teacher")) return { success: false, msg: "⛔ TỪ CHỐI!" }; var lock = LockService.getScriptLock(); try { lock.waitLock(10000); var ss = SpreadsheetApp.openById(SPREADSHEET_ID); var sheet = ss.getSheetByName("ChuDe"); var data = sheet.getDataRange().getValues(); for (var i = 1; i < data.length; i++) if (String(data[i][0]).trim().toLowerCase() == String(obj.ma).trim().toLowerCase()) return { success: false, msg: "Mã chủ đề này đã tồn tại!" }; sheet.appendRow(["'" + obj.ma, obj.ten, obj.pass, obj.time, obj.mota, obj.mon, obj.khoi, "'" + obj.timeStart, "'" + obj.timeEnd, obj.viewMode, obj.soCau]); SpreadsheetApp.flush(); return { success: true, msg: "Đã thêm chủ đề thành công!" }; } catch (e) { return { success: false, msg: "Lỗi: " + e.toString() }; } finally { lock.releaseLock(); } }
 function suaChuDe(obj, reqID, reqPass) { if (!checkRole(reqID, reqPass, "teacher")) return { success: false, msg: "⛔ TỪ CHỐI!" }; var lock = LockService.getScriptLock(); try { lock.waitLock(10000); var ss = SpreadsheetApp.openById(SPREADSHEET_ID); var sheet = ss.getSheetByName("ChuDe"); var data = sheet.getDataRange().getValues(); var targetID = String(obj.ma).trim().toLowerCase(); for (var i = 1; i < data.length; i++) { if (String(data[i][0]).trim().toLowerCase() === targetID) { var rowData = [obj.ten, obj.pass, obj.time, obj.mota, obj.mon, obj.khoi, "'" + obj.timeStart, "'" + obj.timeEnd, obj.viewMode, obj.soCau]; sheet.getRange(i + 1, 2, 1, 10).setValues([rowData]); return { success: true, msg: "Đã cập nhật chủ đề!" }; } } return { success: false, msg: "Không tìm thấy mã chủ đề để sửa!" }; } catch (e) { return { success: false, msg: "Lỗi: " + e.toString() }; } finally { lock.releaseLock(); } }
 function luuCauHoiTuLatex(maChuDe, listCauHoi, reqID, reqPass) { if (!checkRole(reqID, reqPass, "teacher")) return { success: false, msg: "⛔ TỪ CHỐI!" }; try { var ss = SpreadsheetApp.openById(SPREADSHEET_ID); var sheet = ss.getSheetByName("CauHoi"); var dataToAppend = []; for (var i = 0; i < listCauHoi.length; i++) { var item = listCauHoi[i]; var opts = item.options || []; dataToAppend.push(["'" + maChuDe, item.question, opts[0]||"", opts[1]||"", opts[2]||"", opts[3]||"", item.correct, item.explain]); } if (dataToAppend.length > 0) sheet.getRange(sheet.getLastRow() + 1, 1, dataToAppend.length, 8).setValues(dataToAppend); return { success: true, msg: "Đã thêm thành công " + dataToAppend.length + " câu hỏi!" }; } catch (e) { return { success: false, msg: "Lỗi Server: " + e.toString() }; } }
-function layDanhSachCauHoi(maChuDeCanLay) { var data = getData("CauHoi"); var questions = []; var targetID = String(maChuDeCanLay).trim(); var topics = getData("ChuDe"); var limit = 0; for(var t=1; t<topics.length; t++) { if(String(topics[t][0]).trim() === targetID) { limit = topics[t][10] ? parseInt(topics[t][10]) : 0; break; } } for (var i = 1; i < data.length; i++) { if (String(data[i][0]).trim() === targetID) { var listOptions = [data[i][2], data[i][3], data[i][4], data[i][5]].filter(function(o) { return String(o).trim() !== ""; }); if (data[i][1] && listOptions.length > 0) { for (var k = listOptions.length - 1; k > 0; k--) { var j = Math.floor(Math.random() * (k + 1)); var temp = listOptions[k]; listOptions[k] = listOptions[j]; listOptions[j] = temp; } questions.push({ id: i, question: data[i][1], options: listOptions }); } } } for (var i = questions.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var temp = questions[i]; questions[i] = questions[j]; questions[j] = temp; } if (limit > 0 && limit < questions.length) { questions = questions.slice(0, limit); } return questions; }
+function luuCauHoiTrucTiep(maChuDe, listCauHoi, reqID, reqPass) {
+  if (!checkRole(reqID, reqPass, "teacher")) return { success: false, msg: "⛔ TỪ CHỐI!" };
+  var lock = LockService.getScriptLock();
+  try {
+    if (!listCauHoi || !listCauHoi.length) return { success: false, msg: "Danh sách câu hỏi trống!" };
+    lock.waitLock(30000);
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var sheet = ss.getSheetByName("CauHoi");
+    if (sheet.getLastColumn() < 11) sheet.insertColumnsAfter(sheet.getLastColumn(), 11 - sheet.getLastColumn());
+    var targetTopic = normalizeTextCell(maChuDe);
+    var existing = sheet.getDataRange().getValues();
+    var seq = 0;
+    for (var i = 1; i < existing.length; i++) {
+      var rowData = getQuestionRowData(existing[i], i);
+      if (rowData && String(rowData.maChuDe).toLowerCase() === targetTopic.toLowerCase()) {
+        seq++;
+        var currentId = normalizeTextCell(rowData.id);
+        var idMatch = currentId.match(/_(\d+)$/);
+        if (idMatch) seq = Math.max(seq, parseInt(idMatch[1], 10));
+      }
+    }
+    var dataToAppend = [];
+    for (var j = 0; j < listCauHoi.length; j++) {
+      var item = listCauHoi[j] || {};
+      var question = normalizeTextCell(item.question);
+      var options = item.options || {};
+      var optA = normalizeTextCell(options.A), optB = normalizeTextCell(options.B), optC = normalizeTextCell(options.C), optD = normalizeTextCell(options.D), optE = normalizeTextCell(options.E);
+      var correct = normalizeTextCell(item.correctAnswer).toUpperCase();
+      if (!question) continue;
+      if (!/^[A-E]$/.test(correct)) return { success: false, msg: "Có câu hỏi chưa chọn đáp án đúng hợp lệ (A-E)." };
+      var optionMap = { A: optA, B: optB, C: optC, D: optD, E: optE };
+      if (!optionMap[correct]) return { success: false, msg: "Đáp án đúng không có nội dung. Vui lòng kiểm tra lại." };
+      seq++;
+      var autoId = targetTopic + "_" + String(seq).padStart(3, "0");
+      var qID = normalizeTextCell(item.id) || autoId;
+      dataToAppend.push(["'" + qID, "'" + targetTopic, question, optA, optB, optC, optD, optE, correct, normalizeTextCell(item.explanation), item.createdAt || new Date().toISOString()]);
+    }
+    if (!dataToAppend.length) return { success: false, msg: "Không có câu hỏi hợp lệ để lưu!" };
+    sheet.getRange(sheet.getLastRow() + 1, 1, dataToAppend.length, 11).setValues(dataToAppend);
+    SpreadsheetApp.flush();
+    return { success: true, msg: "Đã lưu thành công " + dataToAppend.length + " câu hỏi!" };
+  } catch (e) {
+    return { success: false, msg: "Lỗi Server: " + e.toString() };
+  } finally { lock.releaseLock(); }
+}
+function layDanhSachCauHoi(maChuDeCanLay) { var data = getData("CauHoi"); var questions = []; var targetID = normalizeTextCell(maChuDeCanLay); var topics = getData("ChuDe"); var limit = 0; for(var t=1; t<topics.length; t++) { if(normalizeTextCell(topics[t][0]) === targetID) { limit = topics[t][10] ? parseInt(topics[t][10]) : 0; break; } } for (var i = 1; i < data.length; i++) { var rowData = getQuestionRowData(data[i], i); if (rowData && normalizeTextCell(rowData.maChuDe) === targetID) { var listOptions = rowData.options.filter(function(o) { return normalizeTextCell(o) !== ""; }); if (rowData.question && listOptions.length > 0) { for (var k = listOptions.length - 1; k > 0; k--) { var j = Math.floor(Math.random() * (k + 1)); var temp = listOptions[k]; listOptions[k] = listOptions[j]; listOptions[j] = temp; } questions.push({ id: i, question: rowData.question, options: listOptions }); } } } for (var i = questions.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var temp = questions[i]; questions[i] = questions[j]; questions[j] = temp; } if (limit > 0 && limit < questions.length) { questions = questions.slice(0, limit); } return questions; }
 
 // --- CHẤM ĐIỂM ---
 function xuLyChamDiem(baiLamUser, listID, maChuDe, userID, startTimeStr, violationCount) { 
   var topics = layDanhSachChuDe(); var currentTopic = topics.find(t => t.maChuDe == maChuDe); 
   if (currentTopic && currentTopic.timeEnd) { if (new Date() > new Date(new Date(currentTopic.timeEnd).getTime() + 60000)) return { success: false, msg: "Rất tiếc! Đã quá hạn nộp bài." }; } 
   var data = getData("CauHoi"); var results = []; var diem = 0; var logBaiLam = []; 
-  for(var k=0; k < baiLamUser.length; k++) { var qID = listID[k]; var row = data[qID]; if(!row) continue; var correctAns = String(row[6]).trim(); var isCorrect = (String(baiLamUser[k]).trim().toLowerCase() === correctAns.toLowerCase()); if(isCorrect) diem++; results.push({ isCorrect: isCorrect, dapAnDung: correctAns, giaiThich: row[7] ? String(row[7]) : "" }); logBaiLam.push({ q: row[1], a: baiLamUser[k], c: correctAns, ok: isCorrect }); } 
-  var viewMode = currentTopic.viewMode || "detail"; if (viewMode === "hidden") results = []; else if (viewMode === "score_only") results.forEach(r => { r.dapAnDung = ""; r.giaiThich = ""; }); 
+  for(var k=0; k < baiLamUser.length; k++) { var qID = listID[k]; var row = data[qID]; if(!row) continue; var questionData = getQuestionRowData(row, qID); if(!questionData) continue; var correctAns = normalizeTextCell(questionData.correctText); var isCorrect = (String(baiLamUser[k]).trim().toLowerCase() === correctAns.toLowerCase()); if(isCorrect) diem++; results.push({ isCorrect: isCorrect, dapAnDung: correctAns, giaiThich: questionData.explanation ? String(questionData.explanation) : "" }); logBaiLam.push({ q: questionData.question, a: baiLamUser[k], c: correctAns, ok: isCorrect }); } 
+  // Guard: if topic was not found (deleted/renamed between load and submit), default to detail mode to ensure data is still saved
+  var viewMode = (currentTopic && currentTopic.viewMode) ? currentTopic.viewMode : "detail";
+  if (viewMode === "hidden") results = []; else if (viewMode === "score_only") results.forEach(r => { r.dapAnDung = ""; r.giaiThich = ""; }); 
   var now = new Date(); var start = new Date(startTimeStr); var diffMs = Math.max(0, now - start); var durationStr = Math.floor(diffMs / 60000) + " phút " + Math.floor((diffMs % 60000) / 1000) + " giây"; 
   var lock = LockService.getScriptLock(); 
   try { lock.waitLock(30000); var ss = SpreadsheetApp.openById(SPREADSHEET_ID); var sheet = ss.getSheetByName("DiemSo"); var tenChuDe = getTopicName(maChuDe); 
@@ -184,7 +259,7 @@ function xuLyChamDiem(baiLamUser, listID, maChuDe, userID, startTimeStr, violati
 }
 
 function layLichSuLamBai(userName) { var data = getData("DiemSo"); var history = []; var targetUser = String(userName).trim().toLowerCase(); for (var i = data.length - 1; i >= 1; i--) { if (String(data[i][1]).trim().toLowerCase() == targetUser) history.push({ thoiGianNop: Utilities.formatDate(new Date(data[i][0]), "GMT+7", "HH:mm dd/MM"), maChuDe: String(data[i][2]).trim(), lanThu: data[i][3], tenChuDe: data[i][4], diem: data[i][5], tongCau: data[i][6], thoiGianBatDau: data[i][7] ? String(data[i][7]) : "", thoiGianLam: data[i][8] ? String(data[i][8]) : "Không xác định" }); } return history; };
-function xoaChuDe(maChuDe, reqID, reqPass) { if (!checkRole(reqID, reqPass, "teacher")) return { success: false, msg: "⛔ TỪ CHỐI!" }; try { var ss = SpreadsheetApp.openById(SPREADSHEET_ID); var targetID = String(maChuDe).trim().toLowerCase(); var sheetChuDe = ss.getSheetByName("ChuDe"); var dataChuDe = sheetChuDe.getDataRange().getValues(); var isDeleted = false; for (var i = dataChuDe.length - 1; i >= 1; i--) { if (String(dataChuDe[i][0]).trim().toLowerCase() == targetID) { sheetChuDe.deleteRow(i + 1); isDeleted = true; } } if (!isDeleted) return { success: false, msg: "Không tìm thấy mã chủ đề!" }; var sheetCauHoi = ss.getSheetByName("CauHoi"); var dataCauHoi = sheetCauHoi.getDataRange().getValues(); var countQ = 0; for (var j = dataCauHoi.length - 1; j >= 1; j--) { if (String(dataCauHoi[j][0]).trim().toLowerCase() == targetID) { sheetCauHoi.deleteRow(j + 1); countQ++; } } return { success: true, msg: "Đã xóa chủ đề và " + countQ + " câu hỏi liên quan!" }; } catch (e) { return { success: false, msg: "Lỗi Server: " + e.toString() }; } }
+function xoaChuDe(maChuDe, reqID, reqPass) { if (!checkRole(reqID, reqPass, "teacher")) return { success: false, msg: "⛔ TỪ CHỐI!" }; try { var ss = SpreadsheetApp.openById(SPREADSHEET_ID); var targetID = normalizeTextCell(maChuDe).toLowerCase(); var sheetChuDe = ss.getSheetByName("ChuDe"); var dataChuDe = sheetChuDe.getDataRange().getValues(); var isDeleted = false; for (var i = dataChuDe.length - 1; i >= 1; i--) { if (normalizeTextCell(dataChuDe[i][0]).toLowerCase() == targetID) { sheetChuDe.deleteRow(i + 1); isDeleted = true; } } if (!isDeleted) return { success: false, msg: "Không tìm thấy mã chủ đề!" }; var sheetCauHoi = ss.getSheetByName("CauHoi"); var dataCauHoi = sheetCauHoi.getDataRange().getValues(); var countQ = 0; for (var j = dataCauHoi.length - 1; j >= 1; j--) { var rowTopicOld = normalizeTextCell(dataCauHoi[j][0]).toLowerCase(); var rowTopicNew = normalizeTextCell(dataCauHoi[j][1]).toLowerCase(); if (rowTopicOld == targetID || rowTopicNew == targetID) { sheetCauHoi.deleteRow(j + 1); countQ++; } } return { success: true, msg: "Đã xóa chủ đề và " + countQ + " câu hỏi liên quan!" }; } catch (e) { return { success: false, msg: "Lỗi Server: " + e.toString() }; } }
 function layThongKe(maChuDe) {
   try {
     var data = getData("DiemSo");

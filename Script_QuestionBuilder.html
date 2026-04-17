@@ -1,0 +1,238 @@
+<script>
+app.qb = { questions: [], selectedIndex: -1, activeTab: 'current', topicId: '', topicName: '' };
+
+app.qbEscapeHtml = function(text) {
+  return String(text == null ? '' : text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/`/g, '&#96;');
+};
+app.qbStorageKey = function() { return `qb_${app.accountID || 'guest'}_${app.qb.topicId || 'default'}`; };
+app.qbRenderText = function(text) { return app.formatText(app.qbEscapeHtml(text)); };
+app.qbGetFormData = function() {
+  const correctEl = document.querySelector('input[name="qb-correct"]:checked');
+  return {
+    question: (document.getElementById('qb-question').value || '').trim(),
+    options: {
+      A: (document.getElementById('qb-opt-A').value || '').trim(),
+      B: (document.getElementById('qb-opt-B').value || '').trim(),
+      C: (document.getElementById('qb-opt-C').value || '').trim(),
+      D: (document.getElementById('qb-opt-D').value || '').trim(),
+      E: (document.getElementById('qb-opt-E').value || '').trim()
+    },
+    correctAnswer: correctEl ? correctEl.value : '',
+    explanation: (document.getElementById('qb-explain').value || '').trim()
+  };
+};
+app.qbValidate = function(formData) {
+  const data = formData || app.qbGetFormData();
+  const warnings = [];
+  if (!data.question) warnings.push('⚠️ Câu hỏi đang để trống.');
+  if (!data.correctAnswer) warnings.push('⚠️ Chưa chọn đáp án đúng.');
+  if (data.correctAnswer && !data.options[data.correctAnswer]) warnings.push('⚠️ Đáp án đúng đã chọn chưa có nội dung.');
+  return warnings;
+};
+app.qbSaveLocal = function() { try { localStorage.setItem(app.qbStorageKey(), JSON.stringify(app.qb.questions)); } catch (e) {} };
+app.qbLoadLocal = function() {
+  app.qb.questions = [];
+  try {
+    const raw = localStorage.getItem(app.qbStorageKey());
+    const parsed = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(parsed)) app.qb.questions = parsed;
+  } catch (e) {}
+};
+app.qbClearLocal = function() { try { localStorage.removeItem(app.qbStorageKey()); } catch (e) {} };
+
+app.qbResetForm = function() {
+  document.getElementById('qb-question').value = '';
+  document.getElementById('qb-opt-A').value = '';
+  document.getElementById('qb-opt-B').value = '';
+  document.getElementById('qb-opt-C').value = '';
+  document.getElementById('qb-opt-D').value = '';
+  document.getElementById('qb-opt-E').value = '';
+  document.getElementById('qb-explain').value = '';
+  document.querySelectorAll('input[name="qb-correct"]').forEach(r => r.checked = false);
+  app.qbRenderPreview();
+};
+
+app.qbRenderTable = function() {
+  const body = document.getElementById('qb-table-body');
+  if (!body) return;
+  if (!app.qb.questions.length) {
+    body.innerHTML = `<tr><td colspan="3" style="text-align:center; color:#64748b">Chưa có câu hỏi</td></tr>`;
+    return;
+  }
+  let html = '';
+  app.qb.questions.forEach((q, i) => {
+    const active = i === app.qb.selectedIndex ? 'active' : '';
+    html += `<tr class="${active}" onclick="app.qbSelectRow(${i})"><td>${i + 1}</td><td>${app.qbEscapeHtml(q.question || '').slice(0, 100)}</td><td><b>${app.qbEscapeHtml(q.correctAnswer || '')}</b></td></tr>`;
+  });
+  body.innerHTML = html;
+};
+
+app.qbRenderCurrentPreview = function() {
+  const formData = app.qbGetFormData();
+  const opt = formData.options;
+  const letters = ['A', 'B', 'C', 'D', 'E'];
+  let html = `<div style="padding:8px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:8px;"><div><b>Câu:</b> ${app.qbRenderText(formData.question || '(trống)')}</div>`;
+  letters.forEach(letter => {
+    if (opt[letter]) html += `<div style="margin-top:4px"><b>${letter}.</b> ${app.qbRenderText(opt[letter])}</div>`;
+  });
+  html += `<div style="margin-top:6px; color:#0369a1">✅ Đáp án: <b>${app.qbEscapeHtml(formData.correctAnswer || '(chưa chọn)')}</b></div>`;
+  if (formData.explanation) html += `<div style="margin-top:6px; color:#166534"><b>Lời giải:</b> ${app.qbRenderText(formData.explanation)}</div>`;
+  html += `</div>`;
+  return html;
+};
+
+app.qbRenderAllPreview = function() {
+  if (!app.qb.questions.length) return `<div style="color:#64748b">Chưa có câu hỏi đã thêm.</div>`;
+  let html = '';
+  app.qb.questions.forEach((q, i) => {
+    html += `<div style="padding:8px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:8px;"><div><b>Câu ${i + 1}:</b> ${app.qbRenderText(q.question || '')}</div>`;
+    ['A','B','C','D','E'].forEach(letter => {
+      if (q.options && q.options[letter]) html += `<div style="margin-top:3px"><b>${letter}.</b> ${app.qbRenderText(q.options[letter])}</div>`;
+    });
+    html += `<div style="margin-top:5px; color:#0369a1">✅ Đáp án: <b>${app.qbEscapeHtml(q.correctAnswer || '')}</b></div>`;
+    if (q.explanation) html += `<div style="margin-top:5px; color:#166534"><b>Lời giải:</b> ${app.qbRenderText(q.explanation)}</div>`;
+    html += `</div>`;
+  });
+  return html;
+};
+
+app.qbRenderPreview = function() {
+  const warnBox = document.getElementById('qb-warnings');
+  const warnings = app.qbValidate();
+  warnBox.innerHTML = warnings.map(w => `<div class="qb-warning">${w}</div>`).join('');
+
+  const preview = document.getElementById('qb-preview');
+  preview.innerHTML = app.qb.activeTab === 'all' ? app.qbRenderAllPreview() : app.qbRenderCurrentPreview();
+
+  const topicObj = (app.allTopics || []).find(t => String(t.maChuDe).trim() === String(app.qb.topicId).trim());
+  const target = topicObj && topicObj.soCau ? topicObj.soCau : app.qb.questions.length;
+  document.getElementById('qb-stats').innerText = `${app.qb.questions.length}/${target || 0} câu`;
+
+  if (window.MathJax) MathJax.typesetPromise();
+};
+
+app.qbSelectRow = function(index) { app.qb.selectedIndex = index; app.qbRenderTable(); };
+app.qbSetTab = function(tab) {
+  app.qb.activeTab = tab;
+  document.getElementById('qb-tab-current').classList.toggle('active', tab === 'current');
+  document.getElementById('qb-tab-all').classList.toggle('active', tab === 'all');
+  app.qbRenderPreview();
+};
+
+app.qbAddQuestion = function() {
+  const data = app.qbGetFormData();
+  const warnings = app.qbValidate(data);
+  if (warnings.length) { alert(warnings.join('\n')); return; }
+  app.qb.questions.push({
+    id: '', maChuDe: app.qb.topicId, question: data.question, options: data.options,
+    correctAnswer: data.correctAnswer, explanation: data.explanation, createdAt: new Date().toISOString()
+  });
+  app.qbSaveLocal();
+  app.qbRenderTable();
+  app.qbSetTab('all');
+  app.qbResetForm();
+};
+
+app.qbDeleteSelected = function() {
+  if (!app.qb.questions.length) return;
+  const index = app.qb.selectedIndex >= 0 ? app.qb.selectedIndex : app.qb.questions.length - 1;
+  app.qb.questions.splice(index, 1);
+  app.qb.selectedIndex = -1;
+  app.qbSaveLocal();
+  app.qbRenderTable();
+  app.qbRenderPreview();
+};
+
+app.qbExportJSON = function() {
+  if (!app.qb.questions.length) { alert('Chưa có câu hỏi để export.'); return; }
+  const data = JSON.stringify(app.qb.questions, null, 2);
+  const safeTopicId = String(app.qb.topicId || 'topic').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+  link.download = `cauhoi_${safeTopicId}.json`;
+  link.click();
+};
+
+app.qbImportJSON = function() {
+  const input = document.getElementById('qb-json-file');
+  input.value = '';
+  input.onchange = function() {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const parsed = JSON.parse(e.target.result);
+        if (!Array.isArray(parsed)) throw new Error('Dữ liệu JSON phải là mảng.');
+        app.qb.questions = parsed.map(q => ({
+          id: q.id || '', maChuDe: app.qb.topicId,
+          question: (q.question || '').trim(),
+          options: Object.assign({ A:'', B:'', C:'', D:'', E:'' }, q.options || {}),
+          correctAnswer: String(q.correctAnswer || '').toUpperCase(),
+          explanation: q.explanation || '', createdAt: q.createdAt || new Date().toISOString()
+        })).filter(q => q.question);
+        app.qb.selectedIndex = -1;
+        app.qbSaveLocal();
+        app.qbRenderTable();
+        app.qbSetTab('all');
+      } catch (err) { alert('Import JSON lỗi: ' + err.message); }
+    };
+    reader.readAsText(file, 'utf-8');
+  };
+  input.click();
+};
+
+app.qbSubmitAll = function() {
+  if (!app.qb.questions.length) { alert('Chưa có câu hỏi để nhập đề.'); return; }
+  const btn = document.getElementById('btn-qb-submit');
+  const oldText = btn.innerText;
+  btn.disabled = true;
+  btn.innerText = 'Đang lưu...';
+  google.script.run.withSuccessHandler(res => {
+    btn.disabled = false;
+    btn.innerText = oldText;
+    alert(res.msg);
+    if (!res.success) return;
+    app.qb.questions = [];
+    app.qb.selectedIndex = -1;
+    app.qbClearLocal();
+    app.qbResetForm();
+    app.qbRenderTable();
+    app.qbSetTab('current');
+    app.closeImportModal();
+    if (app.loadDataAndRender) app.loadDataAndRender();
+  }).withFailureHandler(err => {
+    btn.disabled = false;
+    btn.innerText = oldText;
+    alert('Lỗi kết nối: ' + err.message);
+  }).luuCauHoiTrucTiep(app.qb.topicId, app.qb.questions, app.accountID, app.currentPass);
+};
+
+app.openImportModal = function(id, name) {
+  app.qb.topicId = id;
+  app.qb.topicName = name;
+  app.qb.selectedIndex = -1;
+  app.qb.activeTab = 'current';
+  document.getElementById('qb-title').innerText = `Nhập Câu Hỏi cho Đề: ${name}`;
+  document.getElementById('modal-question-builder').style.display = 'flex';
+  app.qbLoadLocal();
+  app.qbRenderTable();
+  app.qbResetForm();
+};
+
+app.closeImportModal = function() { document.getElementById('modal-question-builder').style.display = 'none'; };
+
+window.addEventListener('DOMContentLoaded', function() {
+  ['qb-question','qb-opt-A','qb-opt-B','qb-opt-C','qb-opt-D','qb-opt-E','qb-explain'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', app.qbRenderPreview);
+  });
+  document.querySelectorAll('input[name="qb-correct"]').forEach(el => el.addEventListener('change', app.qbRenderPreview));
+});
+</script>
