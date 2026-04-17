@@ -1,0 +1,79 @@
+<script>
+if (!app.inventory) app.inventory = {};
+app.userBalance = 0;
+app.itemsInfo = {
+    "help_5050": { icon: "⚖️", name: "Trợ giúp 50/50", desc: "Ẩn đi 2 phương án sai.", price: 20 },
+    "check_true": { icon: "🔍", name: "Soi Đáp Án", desc: "Biết chính xác đáp án đúng.", price: 50 },
+    "reveal_wrong": { icon: "❌", name: "Loại bỏ sai", desc: "Gạch bỏ 1 đáp án sai bất kỳ.", price: 15 },
+    "time_5": { icon: "⏰", name: "Thêm 5 Phút", desc: "Cộng thêm 5 phút làm bài.", price: 10 },
+    "time_10": { icon: "⏰", name: "Thêm 10 Phút", desc: "Cộng thêm 10 phút làm bài.", price: 18 },
+    "time_15": { icon: "⏰", name: "Thêm 15 Phút", desc: "Cộng thêm 15 phút làm bài.", price: 25 },
+    "anti_cheat": { icon: "🛡️", name: "Khiên Chống Lỗi", desc: "Xóa 1 lần ghi nhận thoát tab.", price: 100 }
+};
+app.openShopModal = function() {
+    document.getElementById('modal-shop').style.display = 'flex';
+    document.getElementById('user-balance').innerText = "Loading...";
+    google.script.run.withSuccessHandler(res => {
+        app.inventory = res.inventory;
+        app.userBalance = res.balance;
+        document.getElementById('user-balance').innerText = app.userBalance.toLocaleString();
+        app.renderShop();
+    }).layThongTinVatPham(app.accountID);
+};
+app.renderShop = function() {
+    let div = document.getElementById('shop-list');
+    let html = "";
+    for (let code in app.itemsInfo) {
+        let it = app.itemsInfo[code];
+        html += `<div class="shop-item" onclick="app.buyItem('${code}')"><div style="font-size:2.5em; margin-bottom:5px;">${it.icon}</div><div style="font-weight:bold; color:#4b5563;">${it.name}</div><div style="font-size:0.75em; color:#6b7280; height:30px;">${it.desc}</div><div class="shop-price">💎 ${it.price}</div></div>`;
+    }
+    div.innerHTML = html;
+};
+app.buyItem = function(code) {
+    let it = app.itemsInfo[code];
+    if (app.userBalance < it.price) { alert("⛔ Bạn không đủ Tu Vi (Điểm)!"); return; }
+    if (!confirm(`Mua [${it.name}] giá ${it.price} Tu Vi?`)) return;
+    document.getElementById('shop-list').style.opacity = "0.5";
+    google.script.run.withSuccessHandler(res => {
+        document.getElementById('shop-list').style.opacity = "1";
+        if (res.success) {
+            alert("✅ Mua thành công!");
+            app.userBalance = res.newBalance;
+            app.inventory = res.inventory;
+            document.getElementById('user-balance').innerText = app.userBalance.toLocaleString();
+            if(document.getElementById('floating-backpack')) { let total = 0; for(let k in app.inventory) total += app.inventory[k]; let badge = document.getElementById('backpack-count'); if(badge) badge.innerText = total; }
+        } else { alert("❌ " + res.msg); }
+    }).muaVatPham(app.accountID, code, it.price);
+};
+app.openSpinModal = function() { document.getElementById('modal-spin').style.display = 'flex'; document.getElementById('spin-result').innerText = "Chúc may mắn!"; document.getElementById('wheel').style.transform = "rotate(0deg)"; app.checkSpinStatus(); };
+app.closeSpinModal = function() { document.getElementById('modal-spin').style.display = 'none'; };
+app.openInventoryModal = function() { document.getElementById('modal-inventory').style.display = 'flex'; app.renderMyBag('inventory-list', 'gift'); google.script.run.withSuccessHandler(res => { app.inventory = res.inventory; app.renderMyBag('inventory-list', 'gift'); }).layThongTinVatPham(app.accountID); };
+app.openQuizInventory = function() { document.getElementById('modal-quiz-inventory').style.display = 'flex'; app.renderMyBag('quiz-inventory-grid', 'use'); };
+app.renderMyBag = function(containerId, mode) {
+    let div = document.getElementById(containerId); if(!div) return;
+    let html = ""; let hasItem = false; let totalCount = 0;
+    for (let code in app.itemsInfo) {
+        let count = app.inventory[code] || 0; totalCount += count;
+        let it = app.itemsInfo[code];
+        let clickAttr = ""; let classStr = "inv-item";
+        if (count > 0) {
+            hasItem = true;
+            if (mode === 'use') { 
+                let actionType = code.startsWith("time") ? "useTime" : (code=="anti_cheat"?"useAntiCheat": (code=="help_5050"?"use5050": (code=="check_true"?"useCheck":"useRevealWrong")));
+                clickAttr = `onclick="app.preUseItem('${code}', '${actionType}', ${code.includes('time') ? code.replace('time_', '') : 0})"`;
+            } else if (mode === 'gift') { 
+                clickAttr = `onclick="app.processGift('${code}', '${it.name}', ${count})"`; classStr += " giftable";
+            }
+        } else { classStr += " empty"; }
+        let giftIcon = (mode === 'gift' && count > 0) ? `<div style="position:absolute; bottom:5px; right:5px; font-size:0.8em; color:#d97706;">🎁</div>` : '';
+        html += `<div class="${classStr}" ${clickAttr}>${count > 0 ? `<div class="inv-qty">${count}</div>` : ''}<span class="inv-icon">${it.icon}</span><span class="inv-name">${it.name}</span><span class="inv-desc">${it.desc}</span>${giftIcon}</div>`;
+    }
+    if (!hasItem) div.innerHTML = `<div style="text-align:center; padding:20px; color:#9ca3af;">Túi đồ trống.</div>`; else { div.style.display = "grid"; div.innerHTML = html; }
+    let badge = document.getElementById('backpack-count'); if(badge) { badge.innerText = totalCount; badge.style.display = totalCount > 0 ? 'flex' : 'none'; }
+};
+app.checkSpinStatus = function() { google.script.run.withSuccessHandler(res => { app.inventory = res.inventory; if(document.getElementById('floating-backpack')) { let total = 0; for(let k in app.inventory) total += app.inventory[k]; let badge = document.getElementById('backpack-count'); if(badge) { badge.innerText = total; badge.style.display = total > 0 ? 'flex' : 'none'; } } let btnSpin = document.getElementById('btn-spin-daily'); let btnSpinAction = document.querySelector('.spin-btn-center'); if(btnSpin) { if(res.canSpin) { btnSpin.innerHTML = "🎁 Quay Thưởng (1)"; btnSpin.style.opacity = "1"; if(btnSpinAction) { btnSpinAction.style.background = "#dc2626"; btnSpinAction.innerText = "QUAY"; btnSpinAction.style.pointerEvents = "auto"; } } else { btnSpin.innerHTML = "🎁 Đã quay"; btnSpin.style.opacity = "0.7"; if(btnSpinAction) { btnSpinAction.style.background = "#9ca3af"; btnSpinAction.innerText = "XONG"; btnSpinAction.style.pointerEvents = "none"; } } } }).layThongTinVatPham(app.accountID); };
+app.doSpin = function() { let wheel = document.getElementById('wheel'); let resDiv = document.getElementById('spin-result'); let btnCenter = document.querySelector('.spin-btn-center'); if (btnCenter.style.pointerEvents === 'none') return; btnCenter.style.pointerEvents = 'none'; resDiv.innerText = "Đang quay..."; google.script.run.withSuccessHandler(res => { if (!res.success) { resDiv.innerText = res.msg; return; } let deg = Math.floor(3600 + Math.random() * 3600); wheel.style.transform = `rotate(${deg}deg)`; setTimeout(() => { if (res.item.code === "none") { resDiv.innerHTML = `😢 <span style="color:#666">${res.item.name}</span>`; } else { resDiv.innerHTML = `🎉 Chúc mừng! Bạn nhận được: <br><span style="color:#d97706; font-size:1.2em; font-weight:bold">${res.item.name}</span>`; } app.inventory = res.inventory; if(document.getElementById('inventory-list')) app.renderMyBag('inventory-list', 'gift'); let btnSpin = document.getElementById('btn-spin-daily'); if(btnSpin) { btnSpin.innerHTML = "🎁 Đã quay"; btnSpin.style.opacity = "0.7"; } btnCenter.style.background = "#9ca3af"; btnCenter.innerText = "XONG"; }, 4000); }).thucHienQuayThuong(app.accountID); };
+app.processGift = function(code, name, maxQty) { let receiver = prompt(`🎁 TẶNG VẬT PHẨM: ${name}\n\nNhập ID người nhận:`); if (!receiver) return; if (receiver.toLowerCase() === String(app.accountID).toLowerCase()) { alert("Không thể tự tặng!"); return; } let amount = prompt(`Tặng bao nhiêu? (Có: ${maxQty})`, 1); if (amount === null) return; amount = parseInt(amount); if (isNaN(amount) || amount <= 0 || amount > maxQty) { alert("Số lượng sai!"); return; } if (!confirm(`Tặng ${amount}x [${name}] cho "${receiver}"?`)) return; google.script.run.withSuccessHandler(res => { if (res.success) { alert(`✅ ${res.msg}`); app.inventory = res.inventory; app.renderMyBag('inventory-list', 'gift'); } else { alert(`❌ ${res.msg}`); } }).tangVatPham(app.accountID, receiver, code, amount); };
+app.preUseItem = function(code, actionType, timeVal) { document.getElementById('modal-quiz-inventory').style.display = 'none'; if (actionType === "useTime") { app.triggerItem(code, "useTime", 0, timeVal); return; } if (actionType === "useAntiCheat") { app.triggerItem(code, "useAntiCheat", 0); return; } let qBoxes = document.querySelectorAll('.question-box'); let suggestIndex = 1; for (let i=0; i<qBoxes.length; i++) { let rect = qBoxes[i].getBoundingClientRect(); if (rect.top >= 0 && rect.top < window.innerHeight/1.5) { suggestIndex = i + 1; break; } } let input = prompt(`Nhập số thứ tự câu hỏi (1 - ${app.curQCount}):`, suggestIndex); if (input === null) return; let qIndex = parseInt(input) - 1; if (isNaN(qIndex) || qIndex < 0 || qIndex >= app.curQCount) { alert("Số câu không hợp lệ!"); return; } app.scrollToQuestion(qIndex); app.triggerItem(code, actionType, qIndex); };
+app.triggerItem = function(code, actionType, qIndex, extraVal) { let realQID = (qIndex !== undefined) ? app.currentQIds[qIndex] : 0; google.script.run.withSuccessHandler(res => { if (res.success) { app.inventory[code] = res.remaining; let total = 0; for(let k in app.inventory) total += app.inventory[k]; let badge = document.getElementById('backpack-count'); if(badge) badge.innerText = total; if (actionType === "useTime") { app.timeLeft += (extraVal * 60); alert(`✅ Đã cộng thêm ${extraVal} phút!`); } else if (actionType === "useAntiCheat") { app.violationCount = Math.max(0, app.violationCount - 1); alert(`✅ Đã xóa 1 lần vi phạm!`); } else if (res.hint) { let box = document.getElementById(`box-${qIndex}`); let labels = box.querySelectorAll('.opt-label'); let correctVal = String(res.hint.ans).trim().toLowerCase(); if (actionType === "useCheck") { alert(`Đáp án đúng là: ${res.hint.ans}`); for(let lbl of labels) { if (lbl.querySelector('input').value.toLowerCase() === correctVal) { lbl.style.border = "2px solid #10b981"; lbl.style.backgroundColor = "#d1fae5"; lbl.innerHTML += " 👈 ĐÚNG"; } } } else if (actionType === "useRevealWrong") { let hidden = false; for(let lbl of labels) { let val = lbl.querySelector('input').value.toLowerCase(); if (val !== correctVal && lbl.style.opacity !== "0.2") { lbl.style.opacity = "0.2"; lbl.style.pointerEvents = "none"; lbl.innerHTML += " (SAI)"; hidden = true; break; } } if(!hidden) alert("Không còn đáp án sai!"); } else if (actionType === "use5050") { let count = 0; let arr = Array.from(labels).sort(() => Math.random() - 0.5); for(let lbl of arr) { let val = lbl.querySelector('input').value.toLowerCase(); if (val !== correctVal && count < 2 && lbl.style.opacity !== "0.2") { lbl.style.opacity = "0.2"; lbl.style.pointerEvents = "none"; count++; } } } } } else { alert(res.msg); } }).suDungVatPham(app.accountID, code, realQID); };
+</script>

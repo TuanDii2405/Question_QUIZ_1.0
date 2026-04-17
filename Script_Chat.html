@@ -1,0 +1,29 @@
+<script>
+app.toggleChat = function() {
+    let box = document.getElementById('chat-box'); let btn = document.getElementById('btn-toggle-chat');
+    if (box.style.display === 'none') { box.style.display = 'flex'; btn.style.display = 'none'; app.loadChatMessages(); setTimeout(() => { let d = document.getElementById('chat-messages'); d.scrollTop = d.scrollHeight; }, 200); } 
+    else { box.style.display = 'none'; btn.style.display = 'flex'; }
+};
+app.startChatPolling = function() { if (app.chatInterval) clearInterval(app.chatInterval); app.loadChatMessages(); app.chatInterval = setInterval(() => { if(document.getElementById('chat-box').style.display === 'flex') { app.loadChatMessages(); } }, 4000); };
+app.loadChatMessages = function() {
+    google.script.run.withSuccessHandler(chats => {
+        let div = document.getElementById('chat-messages'); let html = ""; let myID = String(app.accountID).toLowerCase();
+        if (chats.length === 0) { div.innerHTML = "<div style='text-align:center; color:#999; margin-top:20px; font-size:0.9em'>Chưa có tin nhắn nào.<br>Hãy bắt đầu trao đổi!</div>"; return; }
+        chats.forEach(c => {
+            let isMe = String(c.id).toLowerCase() === myID; let role = String(c.role).toLowerCase();
+            let align = isMe ? "flex-end" : "flex-start"; let metaAlign = isMe ? "right" : "left"; let senderName = isMe ? "Bạn" : c.user;
+            let bg, color, border;
+            if (role === 'admin') { bg = "#b91c1c"; color = "white"; senderName = "🛡️ " + senderName; } else if (role === 'teacher') { bg = "#dcfce7"; color = "#14532d"; border = "1px solid #86efac"; senderName = "⚡ " + senderName; } else { bg = isMe ? "#2563eb" : "#f3f4f6"; color = isMe ? "white" : "#374151"; border = isMe ? "none" : "1px solid #e5e7eb"; }
+            html += `<div style="display:flex; flex-direction:column; align-items:${align}; margin-bottom:12px; max-width: 100%;"><div style="font-size:0.75em; color:#6b7280; margin-bottom:4px; text-align:${metaAlign}; font-weight:600">${senderName} <span style="font-weight:400; color:#9ca3af; margin-left:5px">${c.time.split(' ')[0]}</span></div><div style="background:${bg}; color:${color}; ${border ? 'border:'+border : ''}; padding:8px 12px; border-radius:12px; max-width:85%; word-wrap:break-word; font-size:0.9em; box-shadow: 0 1px 2px rgba(0,0,0,0.1); line-height:1.4">${app.formatText(c.text)}</div></div>`;
+        });
+        let isAtBottom = (div.scrollTop + div.clientHeight >= div.scrollHeight - 50); div.innerHTML = html; if(isAtBottom) div.scrollTop = div.scrollHeight;
+    }).layNoiDungTraoDoi();
+};
+app.sendChat = function() {
+    let inp = document.getElementById('chat-input'); let txt = inp.value.trim(); if (!txt) return; inp.value = ""; 
+    let div = document.getElementById('chat-messages');
+    div.insertAdjacentHTML('beforeend', `<div style="display:flex; flex-direction:column; align-items:flex-end; margin-bottom:10px; opacity: 0.6"><div style="font-size:0.75em; color:#6b7280; margin-bottom:2px;">Đang gửi...</div><div style="background:#2563eb; color:white; padding:8px 12px; border-radius:12px; max-width:85%; font-size:0.9em;">${app.formatText(txt)}</div></div>`);
+    div.scrollTop = div.scrollHeight;
+    google.script.run.withSuccessHandler(res => { app.loadChatMessages(); }).guiTinNhanTraoDoi(app.accountID, txt);
+};
+</script>

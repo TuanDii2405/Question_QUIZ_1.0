@@ -1,0 +1,69 @@
+<div id="view-dashboard" style="display:none">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+    <div style="display:flex; align-items:center; gap: 10px;">
+      <h3 style="margin:0;">DANH SÁCH ĐỀ THI</h3>
+      <button onclick="app.loadDataAndRender()" class="btn-refresh" title="Cập nhật">↻</button>
+      
+      <button id="btn-add-topic" onclick="app.openAddModal()" style="display:none; padding:6px 12px; background:#059669; color:white; border:none; border-radius:4px; cursor:pointer; font-size:0.9em; font-weight:500">+ Thêm đề</button>
+    </div>
+    
+    <div style="font-size:0.9em; text-align:right; display:flex; align-items:center; justify-content:flex-end; position:relative;">
+      
+      <div class="user-menu-trigger" onclick="app.toggleUserMenu()" style="display:flex; align-items:center; gap:10px;">
+          <div style="text-align:right; line-height:1.2;">
+             <div style="font-weight:bold; color:#2563eb" id="user-name">...</div>
+          </div>
+          <img id="dashboard-user-avatar" src="https://cdn-icons-png.flaticon.com/512/3135/3135715.png" style="width:42px; height:42px; border-radius:50%; border:2px solid #e5e7eb; object-fit:cover;">
+      </div>
+
+      <div id="user-dropdown" class="user-dropdown">
+          <div class="user-dropdown-item" onclick="app.openChangePassModal()">
+             <span>🔑</span> Đổi mật khẩu
+          </div>
+          <div class="user-dropdown-item logout" onclick="app.logout()">
+             <span>⏻</span> Đăng xuất
+          </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div style="background:#f9fafb; padding:10px; border-radius:8px; border:1px solid #e5e7eb; margin-bottom:15px; display:flex; gap:10px; flex-wrap:wrap; align-items:center">
+    <span style="font-weight:600; color:#4b5563">🔍 Lọc bài thi:</span>
+    <select id="filter-status" class="inp" style="width:auto; margin:0; padding:6px; font-weight:bold; color:#2563eb;" onchange="app.applyFilter()"><option value="active">🔥 Đang diễn ra</option><option value="ended">🏁 Đã kết thúc</option><option value="all">📂 Tất cả</option></select>
+    <select id="filter-mon" class="inp" style="width:auto; margin:0; padding:6px" onchange="app.applyFilter()"><option value="">-- Tất cả Môn --</option></select>
+    <select id="filter-khoi" class="inp" style="width:auto; margin:0; padding:6px" onchange="app.applyFilter()"><option value="">-- Tất cả Khối --</option></select>
+  </div>
+  <hr style="border:0; border-top:1px solid #e5e7eb;">
+  
+  <div id="lab-list" class="grid-labs"></div>
+
+  <div class="task-container">
+      <div class="btn-main-task" title="Menu Tác Vụ">📂</div>
+      
+      <div class="btn-sub-task task-rank" onclick="app.openLeaderboard()" data-tooltip="Bảng Xếp Hạng">🏆</div>
+      
+      <div class="btn-sub-task task-spin" onclick="app.openSpinModal()" data-tooltip="Vòng Quay">🎁</div>
+      
+      <div class="btn-sub-task task-bag" onclick="app.openInventoryModal()" data-tooltip="Túi Đồ">🎒
+         <div id="backpack-count" class="backpack-badge" style="display:none; right: -5px; top: -5px;">0</div>
+      </div>
+      
+      <div class="btn-sub-task task-shop" onclick="app.openShopModal()" data-tooltip="Cửa Hàng">🛒</div>
+      
+      <div class="btn-sub-task task-chat" onclick="app.toggleChat()" data-tooltip="Thảo Luận">💬</div>
+  </div>
+
+  <div id="modal-shop" class="modal-overlay"><div class="modal-content" style="max-width: 600px; background:#f5f3ff;"><div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;"><h3 style="margin:0; color:#6d28d9">🛒 Cửa Hàng Tu Tiên</h3><button onclick="document.getElementById('modal-shop').style.display='none'" style="border:none; background:none; font-size:1.5em; cursor:pointer;">&times;</button></div><div class="shop-balance"><div><div style="font-size:0.8em; opacity:0.8">Tài sản hiện có</div><div>💎 Tu Vi (Điểm)</div></div><div class="balance-num" id="user-balance">Loading...</div></div><div id="shop-list" class="shop-grid"></div></div></div>
+  
+  <div id="modal-spin" class="modal-overlay"><div class="modal-content" style="max-width: 450px; text-align: center; background: linear-gradient(to bottom, #fffbeb, #fff);"><div style="display:flex; justify-content:space-between; align-items:center;"><h3 style="margin:0; color:#d97706">🎁 Vòng Quay May Mắn</h3><button onclick="app.closeSpinModal()" style="border:none; background:none; font-size:1.5em; cursor:pointer;">&times;</button></div><div style="position: relative; margin-top: 20px;"><div class="spin-arrow"></div><div id="wheel" class="wheel-container" style="background: conic-gradient(#fecaca 0deg 45deg, #fed7aa 45deg 90deg, #fef08a 90deg 135deg, #bbf7d0 135deg 180deg, #bfdbfe 180deg 225deg, #ddd6fe 225deg 270deg, #fbcfe8 270deg 315deg, #e5e7eb 315deg 360deg);"></div><div class="spin-btn-center" onclick="app.doSpin()">QUAY</div></div><div id="spin-result" style="margin-top: 15px; font-weight: bold; min-height: 25px; color:#2563eb"></div></div></div>
+  
+  <div id="modal-inventory" class="modal-overlay"><div class="modal-content" style="max-width: 500px;"><div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:15px;"><h3 style="margin:0; color:#0284c7">🎒 Kho Đồ Của Bạn</h3><button onclick="document.getElementById('modal-inventory').style.display='none'" style="border:none; background:none; font-size:1.5em; cursor:pointer;">&times;</button></div><div id="inventory-list" style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; max-height:60vh; overflow-y:auto;"></div><div style="margin-top:15px; font-size:0.85em; color:#666; font-style:italic; text-align:center; background:#f9fafb; padding:10px; border-radius:8px;">🎁 <b>Mẹo:</b> Bấm vào vật phẩm để <b>TẶNG</b> cho bạn bè.<br>💡 Vào làm bài thi để <b>SỬ DỤNG</b> vật phẩm.</div></div></div>
+
+  <div id="modal-add-topic" class="modal-overlay"><div class="modal-content"><h3 style="margin-top:0">Thêm Đề Thi Mới</h3><div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px"><div><label>Mã (VD: Lab4):</label> <input type="text" id="new-id" class="inp"></div><div><label>Mật khẩu (Tùy chọn):</label> <input type="text" id="new-pass" class="inp"></div></div><label>Tên chủ đề:</label> <input type="text" id="new-name" class="inp"><label style="color:#2563eb; font-weight:bold">Chế độ hiển thị kết quả:</label><select id="new-view-mode" class="inp" style="border:2px solid #2563eb; background:#eff6ff"><option value="detail">Hiện điểm + Đáp án chi tiết</option><option value="score_only">Chỉ hiện điểm tổng (Bảo mật đề)</option><option value="hidden">Bảo mật cao (Không hiện điểm & Đáp án)</option></select><div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px"><div><label>Môn học:</label><select id="new-mon" class="inp"><option value="">-- Chọn Môn --</option></select></div><div><label>Khối lớp:</label><select id="new-khoi" class="inp"><option value="">-- Chọn Khối --</option></select></div></div><div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; background:#f0f9ff; padding:10px; border-radius:8px; margin-top:5px; border:1px solid #bae6fd"><div><label style="color:#0369a1">Mở đề lúc (Tùy chọn):</label><input type="datetime-local" id="new-start-time" class="inp" style="font-size:0.85em"></div><div><label style="color:#dc2626">Đóng đề lúc (Tùy chọn):</label><input type="datetime-local" id="new-end-time" class="inp" style="font-size:0.85em"></div></div><div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px;"><div><label>Thời gian (phút):</label> <input type="number" id="new-time" class="inp" placeholder="VD: 45"></div><div><label style="color:#d97706">Số câu lấy (0=Tất cả):</label> <input type="number" id="new-so-cau" class="inp" placeholder="VD: 10"></div></div><label>Mô tả:</label> <textarea id="new-desc" class="inp" rows="2"></textarea><div style="display:flex; gap:10px; margin-top:15px;"><button onclick="app.saveNewTopic()" id="btn-save-topic" class="btn" style="background:#2563eb">Lưu</button><button onclick="app.closeAddModal()" class="btn" style="background:#9ca3af">Hủy</button></div></div></div>
+  <div id="modal-edit-topic" class="modal-overlay"><div class="modal-content"><h3 style="margin-top:0">Cập Nhật Đề Thi</h3><div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px"><div><label>Mã (Không sửa):</label> <input type="text" id="edit-id" class="inp" disabled style="background:#eee"></div><div><label>Mật khẩu:</label> <input type="text" id="edit-pass" class="inp"></div></div><label>Tên chủ đề:</label> <input type="text" id="edit-name" class="inp"><label style="color:#2563eb; font-weight:bold">Chế độ hiển thị:</label><select id="edit-view-mode" class="inp" style="border:2px solid #2563eb; background:#eff6ff"><option value="detail">Hiện điểm + Đáp án chi tiết</option><option value="score_only">Chỉ hiện điểm tổng</option><option value="hidden">Bảo mật cao</option></select><div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px"><div><label>Môn học:</label><select id="edit-mon" class="inp"><option value="">-- Chọn Môn --</option></select></div><div><label>Khối lớp:</label><select id="edit-khoi" class="inp"><option value="">-- Chọn Khối --</option></select></div></div><div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; background:#f0f9ff; padding:10px; border-radius:8px; margin-top:5px; border:1px solid #bae6fd"><div><label style="color:#0369a1">Mở đề lúc:</label><input type="datetime-local" id="edit-start-time" class="inp" style="font-size:0.85em"></div><div><label style="color:#dc2626">Đóng đề lúc:</label><input type="datetime-local" id="edit-end-time" class="inp" style="font-size:0.85em"></div></div><div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px;"><div><label>Thời gian (phút):</label> <input type="number" id="edit-time" class="inp"></div><div><label style="color:#d97706">Số câu lấy (0=Tất cả):</label> <input type="number" id="edit-so-cau" class="inp"></div></div><label>Mô tả:</label> <textarea id="edit-desc" class="inp" rows="2"></textarea><div style="display:flex; gap:10px; margin-top:15px;"><button onclick="app.updateTopic()" id="btn-update-topic" class="btn" style="background:#2563eb">Lưu Cập Nhật</button><button onclick="document.getElementById('modal-edit-topic').style.display='none'" class="btn" style="background:#9ca3af">Hủy</button></div></div></div>
+  <div id="modal-stats" class="modal-overlay"><div class="modal-content" style="max-width: 800px; width: 95%;"><div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:15px;"><h3 id="stats-title" style="margin:0; color:#2563eb">Thống kê</h3><button onclick="app.closeStatsModal()" style="border:none; background:none; font-size:1.5em; cursor:pointer; color:#666">&times;</button></div><div id="stats-content"></div><div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px; border-top:1px solid #eee; padding-top:15px;"><button id="btn-export-pdf" onclick="app.processExportPDF()" class="btn" style="background:#dc2626; width:auto; display:flex; align-items:center; gap:5px">📄 Tải PDF</button><button onclick="app.exportToExcel()" class="btn" style="background:#10b981; width:auto; display:flex; align-items:center; gap:5px">📥 Tải Excel</button><button onclick="app.closeStatsModal()" class="btn" style="background:#6b7280; width:auto;">Đóng</button></div></div></div>
+  <div id="modal-change-pass" class="modal-overlay"><div class="modal-content"><h3 style="margin-top:0">Đổi Mật Khẩu</h3><label>Mật khẩu cũ:</label> <input type="password" id="txt-old-pass" class="inp"><label>Mật khẩu mới:</label> <input type="password" id="txt-new-pass" class="inp"><label>Nhập lại mật khẩu mới:</label> <input type="password" id="txt-confirm-pass" class="inp"><div style="display:flex; gap:10px; margin-top:15px;"><button onclick="app.processChangePass()" id="btn-save-pass" class="btn" style="background:#2563eb">Lưu thay đổi</button><button onclick="app.closeChangePassModal()" class="btn" style="background:#9ca3af">Hủy</button></div></div></div>
+  <div id="modal-import-latex" class="modal-overlay"><div class="modal-content" style="max-width: 600px; width: 95%;"><h3 id="import-title" style="margin-top:0; color:#d97706">Thêm câu hỏi (LaTeX)</h3><p style="font-size:0.85em; color:#666; margin-bottom:10px">Dán nội dung <code>\begin{ex} ... \end{ex}</code> vào bên dưới.</p><textarea id="latex-input" class="inp" rows="12" style="font-family:monospace; font-size:0.9em; background:#fefce8"></textarea><div style="display:flex; gap:10px; margin-top:15px;"><button onclick="app.processLatex()" id="btn-save-latex" class="btn" style="background:#d97706">Phân tích & Lưu</button><button onclick="app.closeImportModal()" class="btn" style="background:#9ca3af">Đóng</button></div></div></div>
+  <div id="modal-review-student" class="modal-overlay"><div class="modal-content" style="max-width: 800px; width: 95%;"><div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; padding-bottom:10px;"><h3 style="margin:0; color:#2563eb">Chi tiết bài làm</h3><button onclick="document.getElementById('modal-review-student').style.display='none'" style="border:none; background:none; font-size:1.5em; cursor:pointer;">&times;</button></div><div id="review-student-content" style="margin-top:15px; max-height: 70vh; overflow-y: auto;"></div></div></div>
+</div>

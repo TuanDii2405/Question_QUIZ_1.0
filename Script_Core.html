@@ -1,0 +1,186 @@
+<script>
+var app = {
+  // Biến toàn cục
+  user: null, role: null, accountID: null, currentPass: null, 
+  curTopic: null, curQCount: 0, 
+  timerInterval: null, timeLeft: 0, startTime: null, topicIdForAdd: null,
+  allTopics: [], allHistory: [], metadata: { mon: [], khoi: [] },
+  currentStatsData: [], currentStatsName: "", currentStatsID: null,
+  currentQIds: [], myChart: null,
+  violationCount: 0, maxViolations: 1,
+  canChat: false, chatInterval: null, onlineInterval: null,
+  fullMetadataCache: { mon: [], khoi: [] },
+
+  // Hàm xử lý văn bản (LaTeX, xuống dòng)
+  formatText: function(text) {
+    if (!text) return "";
+    return text.replace(/\\textbf\{([^}]+)\}/g, '<b>$1</b>')
+               .replace(/\\textit\{([^}]+)\}/g, '<i>$1</i>')
+               .replace(/\\underline\{([^}]+)\}/g, '<u>$1</u>')
+               .replace(/\\newline/g, '<br>')
+               .replace(/\n/g, ' '); 
+  },
+
+  // Chuyển đổi màn hình (View)
+  showView: function(viewId) {
+    ['view-login', 'view-dashboard', 'view-quiz'].forEach(id => { 
+        let el = document.getElementById(id); 
+        if(el) el.style.display = 'none'; 
+    });
+    document.getElementById(viewId).style.display = 'block';
+  },
+
+  // Đăng nhập
+  login: function() {
+    let u = document.getElementById('u').value; 
+    let p = document.getElementById('p').value; 
+    let msg = document.getElementById('login-msg'); 
+    let btn = document.querySelector('#view-login .btn');
+    
+    if(!u || !p) { msg.innerText = "Vui lòng nhập đủ thông tin!"; return; }
+    
+    msg.innerText = "Đang kết nối..."; 
+    btn.disabled = true;
+    
+    google.script.run.withSuccessHandler(res => {
+      btn.disabled = false;
+      if(res.success) {
+        app.user = res.msg; 
+        app.accountID = u; 
+        app.role = res.role; 
+        app.currentPass = p; 
+        app.canChat = res.allowChat; 
+        
+        // Xử lý quyền Chat
+        if (app.canChat) { 
+            document.getElementById('chat-widget-container').style.display = 'block'; 
+            if(app.startChatPolling) app.startChatPolling(); 
+        } else { 
+            document.getElementById('chat-widget-container').style.display = 'none'; 
+        }
+        
+        // Hiển thị tên
+        document.getElementById('user-name').innerText = res.msg;
+        
+        // Phân quyền Admin/Teacher
+        let role = String(app.role).toLowerCase();
+        let btnAddTopic = document.getElementById('btn-add-topic');
+        if (btnAddTopic) btnAddTopic.style.display = (role === 'admin' || role === 'teacher') ? 'inline-block' : 'none';
+        
+        let viewUserManager = document.getElementById('view-user-manager');
+        if (role === 'admin') { 
+            if(viewUserManager) viewUserManager.style.display = 'block'; 
+            if(app.loadUserList) app.loadUserList(); 
+        } else { 
+            if(viewUserManager) viewUserManager.style.display = 'none'; 
+        }
+        
+        // Kích hoạt theo dõi Online
+        if(app.startOnlineTracking) app.startOnlineTracking(res.msg); 
+        setInterval(function() { google.script.run.capNhatThoiGianOnline(app.accountID); }, 300000);
+        
+        // Tải dữ liệu ban đầu
+        if(app.loadMetadata) app.loadMetadata(() => { app.loadDataAndRender(); });
+        
+        // Check trạng thái quay thưởng ngày mới
+        if(app.checkSpinStatus) app.checkSpinStatus();
+
+        app.showView('view-dashboard');
+        document.getElementById('p').value = ""; 
+        msg.innerText = "";
+      } else { 
+        msg.innerText = res.msg; 
+      }
+    }).withFailureHandler(e => { 
+        btn.disabled = false; 
+        msg.innerText = "Lỗi kết nối: " + e.message; 
+    }).kiemTraDangNhap(u, p);
+  },
+
+  // Đăng xuất
+  logout: function() {
+    if (app.chatInterval) clearInterval(app.chatInterval); 
+    if (app.onlineInterval) clearInterval(app.onlineInterval);
+    document.getElementById('marquee-box').style.display = 'none';
+    document.getElementById('chat-widget-container').style.display = 'none';
+    
+    app.user = null; app.role = null; app.accountID = null; app.currentPass = null; 
+    app.allTopics = []; app.metadata = { mon: [], khoi: [] };
+    
+    document.getElementById('lab-list').innerHTML = ""; 
+    document.getElementById('login-msg').innerText = "";
+    app.showView('view-login');
+  },
+
+  // Modal Đổi mật khẩu
+  openChangePassModal: function() { 
+      document.getElementById('modal-change-pass').style.display = 'flex'; 
+      document.getElementById('txt-old-pass').value = ""; 
+      document.getElementById('txt-new-pass').value = ""; 
+      document.getElementById('txt-confirm-pass').value = ""; 
+  },
+  
+  closeChangePassModal: function() { 
+      document.getElementById('modal-change-pass').style.display = 'none'; 
+  },
+  
+  openProfile: function() { 
+      // Hàm cũ, giờ đã dùng toggleUserMenu thay thế ở view nhưng giữ lại để tương thích
+      app.openChangePassModal(); 
+  },
+  
+  processChangePass: function() { 
+      let oldPass = document.getElementById('txt-old-pass').value; 
+      let newPass = document.getElementById('txt-new-pass').value; 
+      let confirmPass = document.getElementById('txt-confirm-pass').value; 
+      
+      if (!oldPass || !newPass || !confirmPass) { alert("Vui lòng điền đủ thông tin!"); return; } 
+      if (newPass !== confirmPass) { alert("Mật khẩu xác nhận không khớp!"); return; } 
+      
+      let btn = document.getElementById('btn-save-pass'); 
+      btn.disabled = true; 
+      btn.innerText = "Đang xử lý..."; 
+      
+      google.script.run.withSuccessHandler(res => { 
+          btn.disabled = false; 
+          btn.innerText = "Lưu thay đổi"; 
+          alert(res.msg); 
+          if (res.success) app.closeChangePassModal(); 
+      }).doiMatKhau(app.accountID, oldPass, newPass); 
+  },
+
+  // --- LOGIC MENU USER DROPDOWN (MỚI) ---
+  toggleUserMenu: function() {
+    let menu = document.getElementById('user-dropdown');
+    if (menu.style.display === 'block') {
+        menu.style.display = 'none';
+        document.removeEventListener('click', app.handleClickOutsideMenu);
+    } else {
+        menu.style.display = 'block';
+        // Delay nhẹ để sự kiện click hiện tại không làm đóng menu ngay lập tức
+        setTimeout(() => {
+            document.addEventListener('click', app.handleClickOutsideMenu);
+        }, 0);
+    }
+  },
+
+  handleClickOutsideMenu: function(event) {
+    let menu = document.getElementById('user-dropdown');
+    let trigger = document.querySelector('.user-menu-trigger');
+    
+    // Nếu click ra ngoài menu và không phải click vào nút trigger
+    if (menu && !menu.contains(event.target) && !trigger.contains(event.target)) {
+        menu.style.display = 'none';
+        document.removeEventListener('click', app.handleClickOutsideMenu);
+    }
+  }
+};
+
+// Đóng modal leaderboard khi bấm ra ngoài (giữ nguyên logic cũ)
+window.onclick = function(event) { 
+    var modalLB = document.getElementById('modal-leaderboard'); 
+    if (event.target == modalLB && app.closeLeaderboard) { 
+        app.closeLeaderboard(); 
+    } 
+};
+</script>

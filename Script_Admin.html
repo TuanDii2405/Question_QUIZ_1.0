@@ -1,0 +1,61 @@
+<script>
+app.renderCheckboxGroup = function(containerId, listData, className) {
+    let container = document.getElementById(containerId);
+    if (!container) return; 
+    if (!listData || listData.length === 0) { container.innerHTML = '<div style="color:#999">Không có dữ liệu</div>'; return; }
+    let html = '';
+    listData.forEach(item => {
+        html += `<label class="checkbox-item"><input type="checkbox" class="${className}" value="${item.ma}"> ${item.ten} (${item.ma})</label>`;
+    });
+    container.innerHTML = html;
+};
+
+app.loadUserList = function() {
+    let tbody = document.getElementById('user-list-body'); tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px; color:#666;">Đang tải...</td></tr>';
+    google.script.run.withSuccessHandler(users => {
+      let html = "";
+      if (users.length === 0) { html = '<tr><td colspan="7" style="text-align:center;">Chưa có tài khoản nào.</td></tr>'; } 
+      else {
+        users.forEach(u => {
+          let roleColor = u.role === 'Admin' ? '#b91c1c' : (u.role === 'Teacher' ? '#059669' : '#4b5563');
+          let showMon = u.mon ? (u.mon.length > 20 ? u.mon.substring(0,20)+'...' : u.mon) : 'Tất cả';
+          let showKhoi = u.khoi ? (u.khoi.length > 20 ? u.khoi.substring(0,20)+'...' : u.khoi) : 'Tất cả';
+          html += `<tr style="border-bottom:1px solid #eee;"><td style="padding:10px;"><b>${u.id}</b></td><td style="padding:10px;">${u.name}</td><td style="padding:10px; text-align:center;"><span style="color:${roleColor}; font-weight:bold">${u.role}</span></td><td style="padding:10px; text-align:center;">${u.chat}</td><td style="padding:10px; color:#2563eb; font-size:0.9em" title="${u.mon}">${showMon}</td><td style="padding:10px; color:#d97706; font-size:0.9em" title="${u.khoi}">${showKhoi}</td><td style="padding:10px; text-align:center;"><button onclick="app.editUser('${u.id}', '${u.name}', '${u.role}', '${u.chat}', '${u.mon}', '${u.khoi}')" style="cursor:pointer; border:none; background:none; font-size:1.2em">✏️</button><button onclick="app.deleteUser('${u.id}')" style="cursor:pointer; border:none; background:none; font-size:1.2em">🗑</button></td></tr>`;
+        });
+      }
+      tbody.innerHTML = html;
+    }).layDanhSachTaiKhoan(app.accountID, app.currentPass);
+};
+
+app.openUserModal = function() {
+    document.getElementById('modal-user').style.display = 'flex'; document.getElementById('modal-user-title').innerText = "Thêm Tài Khoản Mới";
+    document.getElementById('u-id').value = ""; document.getElementById('u-id').disabled = false; document.getElementById('u-name').value = ""; document.getElementById('u-pass').value = "";
+    document.getElementById('u-role').value = "Student"; document.getElementById('u-chat').value = "Yes";
+    document.querySelectorAll('.chk-mon').forEach(cb => cb.checked = false);
+    document.querySelectorAll('.chk-khoi').forEach(cb => cb.checked = false);
+};
+
+app.editUser = function(id, name, role, chat, monStr, khoiStr) {
+    document.getElementById('modal-user').style.display = 'flex'; document.getElementById('modal-user-title').innerText = "Cập Nhật Tài Khoản";
+    let uid = document.getElementById('u-id'); uid.value = id; uid.disabled = true; document.getElementById('u-name').value = name; document.getElementById('u-pass').value = ""; 
+    document.getElementById('u-role').value = role; document.getElementById('u-chat').value = chat;
+    let arrMon = []; if (monStr && monStr !== 'undefined' && monStr !== 'null') arrMon = monStr.split(',').map(s => s.trim().toLowerCase());
+    document.querySelectorAll('.chk-mon').forEach(cb => { cb.checked = arrMon.includes(cb.value.toLowerCase()); });
+    let arrKhoi = []; if (khoiStr && khoiStr !== 'undefined' && khoiStr !== 'null') arrKhoi = khoiStr.split(',').map(s => s.trim().toLowerCase());
+    document.querySelectorAll('.chk-khoi').forEach(cb => { cb.checked = arrKhoi.includes(cb.value.toLowerCase()); });
+};
+
+app.saveUser = function() {
+    let id = document.getElementById('u-id').value.trim(), name = document.getElementById('u-name').value.trim(), pass = document.getElementById('u-pass').value.trim();
+    let role = document.getElementById('u-role').value, chat = document.getElementById('u-chat').value;
+    let selectedMon = []; document.querySelectorAll('.chk-mon:checked').forEach(cb => selectedMon.push(cb.value)); let monStr = selectedMon.join(',');
+    let selectedKhoi = []; document.querySelectorAll('.chk-khoi:checked').forEach(cb => selectedKhoi.push(cb.value)); let khoiStr = selectedKhoi.join(',');
+    if (!id || !name) { alert("Vui lòng nhập ID và Tên!"); return; }
+    let btn = document.getElementById('btn-save-user'); btn.disabled = true; btn.innerText = "Đang lưu...";
+    google.script.run.withSuccessHandler(res => {
+      btn.disabled = false; btn.innerText = "Lưu lại"; alert(res.msg); if (res.success) { document.getElementById('modal-user').style.display = 'none'; app.loadUserList(); }
+    }).luuTaiKhoan({id, name, pass, role, chat, mon: monStr, khoi: khoiStr}, app.accountID, app.currentPass);
+};
+
+app.deleteUser = function(id) { if (confirm(`Bạn có chắc chắn muốn xóa tài khoản: ${id}?`)) { google.script.run.withSuccessHandler(res => { alert(res.msg); if (res.success) app.loadUserList(); }).xoaTaiKhoan(id, app.accountID, app.currentPass); } };
+</script>

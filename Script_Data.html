@@ -1,0 +1,238 @@
+<script>
+// --- DATA MANAGEMENT ---
+
+app.loadMetadata = function(callback) {
+    google.script.run.withSuccessHandler(res => {
+       app.metadata = res;
+       var currentRole = String(app.role).trim().toLowerCase();
+       
+       if (currentRole === 'admin') {
+           app.fullMetadataCache = res; 
+           app.renderCheckboxGroup('container-mon', res.mon, 'chk-mon');
+           app.renderCheckboxGroup('container-khoi', res.khoi, 'chk-khoi');
+       }
+       if (currentRole === 'admin' || currentRole === 'teacher') {
+           app.fillSelect('edit-mon', res.mon, '-- Chọn Môn --');
+           app.fillSelect('edit-khoi', res.khoi, '-- Chọn Khối --');
+       }
+       
+       app.fillSelect('filter-mon', res.mon, '-- Tất cả Môn --'); 
+       app.fillSelect('filter-khoi', res.khoi, '-- Tất cả Khối --');
+       app.fillSelect('new-mon', res.mon, '-- Chọn Môn --'); 
+       app.fillSelect('new-khoi', res.khoi, '-- Chọn Khối --');
+       
+       if(callback) callback();
+    }).layDanhSachMetadata(app.accountID); 
+};
+
+app.fillSelect = function(id, list, defaultText) { 
+    let sel = document.getElementById(id); 
+    if(!sel) return; 
+    sel.innerHTML = `<option value="">${defaultText}</option>`; 
+    list.forEach(item => { sel.innerHTML += `<option value="${item.ma}">${item.ten}</option>`; }); 
+};
+
+app.loadDataAndRender = function() {
+    let listDiv = document.getElementById('lab-list'); 
+    listDiv.innerHTML = "<p style='text-align:center'>Đang tải dữ liệu...</p>";
+    google.script.run.withSuccessHandler(topics => {
+      app.allTopics = topics; 
+      google.script.run.withSuccessHandler(history => { 
+          app.allHistory = history; 
+          app.applyFilter(); 
+      }).layLichSuLamBai(app.user);
+    }).layDanhSachChuDe(app.accountID); 
+};
+
+// --- HÀM LỌC TRẠNG THÁI (ĐÃ CẬP NHẬT) ---
+app.applyFilter = function() {
+     let fMon = document.getElementById('filter-mon').value; 
+     let fKhoi = document.getElementById('filter-khoi').value;
+     let fStatus = document.getElementById('filter-status').value; // Lấy giá trị lọc trạng thái
+     
+     let now = new Date();
+
+     let filtered = app.allTopics.filter(t => { 
+         let matchMon = (fMon === "") || (t.maMon === fMon); 
+         let matchKhoi = (fKhoi === "") || (t.maKhoi === fKhoi); 
+         
+         // Logic lọc trạng thái
+         let endTime = t.timeEnd ? new Date(t.timeEnd) : null;
+         let isEnded = endTime && now > endTime;
+         
+         let matchStatus = true;
+         if (fStatus === "active") {
+             matchStatus = !isEnded; // Chỉ lấy bài chưa kết thúc
+         } else if (fStatus === "ended") {
+             matchStatus = isEnded; // Chỉ lấy bài đã kết thúc
+         }
+         // Nếu 'all' thì matchStatus = true
+
+         return matchMon && matchKhoi && matchStatus; 
+     });
+     
+     app.renderDashboard(filtered, app.allHistory);
+};
+
+app.renderDashboard = function(topics, history) {
+    let listDiv = document.getElementById('lab-list');
+    if(topics.length === 0) { listDiv.innerHTML = "<p style='text-align:center; color:#666'>Không tìm thấy bài thi nào phù hợp.</p>"; return; }
+    let html = ""; let now = new Date();
+    
+    topics.forEach((t) => {
+      let timeDisplay = t.thoiGian ? `${t.thoiGian} phút` : 'Tự do'; 
+      let safeDesc = t.moTa || 'Không có mô tả';
+      let myHist = history.filter(h => String(h.maChuDe).trim() === String(t.maChuDe).trim());
+      
+      let displayKhoi = t.maKhoi; 
+      let objKhoi = app.metadata.khoi.find(k => k.ma == t.maKhoi); if (objKhoi) displayKhoi = objKhoi.ten;
+      let displayMon = t.maMon; 
+      let objMon = app.metadata.mon.find(m => m.ma == t.maMon); if (objMon) displayMon = objMon.ten;
+      
+      let statusHtml = ""; let isLocked = false; 
+      let startTime = t.timeStart ? new Date(t.timeStart) : null; 
+      let endTime = t.timeEnd ? new Date(t.timeEnd) : null; 
+      let timeInfo = "";
+      
+      if (endTime && now > endTime) { isLocked = true; statusHtml = `<span style="background:#fee2e2; color:#dc2626; padding:2px 8px; border-radius:4px; font-size:0.85em; font-weight:bold; border:1px solid #fecaca">Đã kết thúc</span>`; } 
+      else if (startTime && now < startTime) { isLocked = true; let dateStr = startTime.toLocaleString('vi-VN', {hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit'}); statusHtml = `<span style="background:#ffedd5; color:#c2410c; padding:2px 8px; border-radius:4px; font-size:0.85em; font-weight:bold; border:1px solid #fed7aa">Mở lúc: ${dateStr}</span>`; } 
+      else { statusHtml = `<span style="background:#dcfce7; color:#15803d; padding:2px 8px; border-radius:4px; font-size:0.85em; font-weight:bold; border:1px solid #bbf7d0">Đang mở</span>`; }
+      
+      if (endTime) { let endStr = endTime.toLocaleString('vi-VN', {hour:'2-digit', minute:'2-digit', day:'2-digit', month:'2-digit'}); timeInfo = `<div style="font-size:0.8em; color:#dc2626; margin-top:5px;">Hạn chót: ${endStr}</div>`; }
+      
+      let tagHtml = ""; 
+      if(t.maKhoi) tagHtml += `<span style="background:#f3f4f6; color:#4b5563; padding:2px 8px; border-radius:4px; font-size:0.85em; margin-right:5px; border:1px solid #e5e7eb; font-weight:500">${displayKhoi}</span>`; 
+      if(t.maMon) tagHtml += `<span style="background:#ecfdf5; color:#059669; padding:2px 8px; border-radius:4px; font-size:0.85em; margin-right:5px; border:1px solid #a7f3d0; font-weight:500">${displayMon}</span>`;
+      
+      let histHtml = ""; 
+      if (myHist.length === 0) { histHtml = `<li class="history-item" style="color:#999; justify-content:center;">Chưa làm lần nào</li>`; } 
+      else { myHist.forEach(h => { let badgeClass = h.diem >= (h.tongCau/2) ? 'pass' : 'fail'; histHtml += `<li class="history-item"><div style="display:flex; justify-content:space-between; width:100%"><span style="font-weight:bold; color:#2563eb">Lần #${h.lanThu}</span><span class="score-badge ${badgeClass}">${h.diem}/${h.tongCau}</span></div><div style="font-size:0.85em; color:#555; width:100%; display:grid; grid-template-columns: 1fr 1fr; gap:5px;"><div>▶ ${h.thoiGianBatDau.split(' ')[1]||''}</div><div>⏱️ ${h.thoiGianLam}</div></div></li>`; }); }
+      
+      let adminBtnHtml = ""; 
+      if (app.role && (app.role.toLowerCase() === 'admin' || app.role.toLowerCase() === 'teacher')) { 
+          let editBtn = `<button class="action-btn" onclick="app.openEditTopicModal('${t.maChuDe}')" style="border-right:1px solid #e5e7eb; color:#2563eb;" title="Sửa">✏️</button>`;
+          adminBtnHtml = `<div style="display:flex;">${editBtn}<button class="action-btn" onclick="app.openImportModal('${t.maChuDe}', '${t.tenChuDe}')" style="border-right:1px solid #e5e7eb; color:#d97706;" title="Thêm câu hỏi">➕</button><button class="action-btn" onclick="app.viewStats('${t.maChuDe}', '${t.tenChuDe}')" style="border-right:1px solid #e5e7eb; color:#059669;" title="Thống kê">📊</button><button class="action-btn" onclick="app.deleteTopic('${t.maChuDe}', '${t.tenChuDe}')" style="border-right:1px solid #e5e7eb; color:#dc2626;" title="Xóa">🗑</button></div>`; 
+      }
+      
+      let startBtnAttr = isLocked ? `disabled style="background:#9ca3af; cursor:not-allowed; border-right:1px solid #e5e7eb; color:white"` : `onclick="app.prepareStart('${t.maChuDe}', '${t.tenChuDe}', '${t.matKhau}', '${t.thoiGian}', '${t.timeStart}', '${t.timeEnd}')" style="color:var(--primary); border-right:1px solid #e5e7eb;"`; let btnText = isLocked ? "Đã khóa" : "▶ Làm bài";
+      let viewModeLabel = ""; if(t.viewMode === 'score_only') viewModeLabel = '<span style="background:#fefce8; color:#a16207; padding:2px 6px; border-radius:4px; border:1px solid #fde047; font-size:0.8em; margin-left:5px;">Chỉ hiện điểm</span>'; else if(t.viewMode === 'hidden') viewModeLabel = '<span style="background:#f3f4f6; color:#374151; padding:2px 6px; border-radius:4px; border:1px solid #d1d5db; font-size:0.8em; margin-left:5px;">🔒 Bảo mật</span>';
+      
+      html += `<div class="lab-card"><div class="card-content"><div style="display:flex; justify-content:space-between; align-items:start"><div style="font-weight:bold; font-size:1.1em; color:#2563eb; margin-bottom:5px;">${t.tenChuDe}</div>${statusHtml}</div><div style="margin-bottom:10px;">${tagHtml}${viewModeLabel}</div><div style="font-size:0.9em; color:#4b5563; font-style:italic; margin-bottom:5px;">${safeDesc}</div>${timeInfo}<div style="display:flex; gap:8px; font-size:0.85em; margin-top:10px;"><span style="background:#e0f2fe; color:#0369a1; padding:2px 8px; border-radius:4px;">⏱️ ${timeDisplay}</span>${t.matKhau ? '<span style="background:#fef3c7; color:#b45309; padding:2px 8px; border-radius:4px;">🔒 Pass</span>' : ''}</div></div><div class="card-actions"><button class="action-btn" ${startBtnAttr}>${btnText}</button>${adminBtnHtml}<button class="action-btn" onclick="app.toggleHistory(this)">🕒 (${myHist.length}) ▼</button></div><div class="history-panel"><ul class="history-list">${histHtml}</ul></div></div>`;
+    });
+    listDiv.innerHTML = html;
+};
+
+// --- CRUD OPERATIONS ---
+app.openAddModal = function() { document.getElementById('modal-add-topic').style.display = 'flex'; };
+app.closeAddModal = function() { document.getElementById('modal-add-topic').style.display = 'none'; };
+
+app.openEditTopicModal = function(maChuDe) {
+    var topic = app.allTopics.find(t => String(t.maChuDe) === String(maChuDe));
+    if (!topic) return;
+    document.getElementById('modal-edit-topic').style.display = 'flex';
+    document.getElementById('edit-id').value = topic.maChuDe;
+    document.getElementById('edit-pass').value = topic.matKhau || "";
+    document.getElementById('edit-name').value = topic.tenChuDe;
+    document.getElementById('edit-view-mode').value = topic.viewMode || "detail";
+    document.getElementById('edit-mon').value = topic.maMon || "";
+    document.getElementById('edit-khoi').value = topic.maKhoi || "";
+    document.getElementById('edit-start-time').value = topic.timeStart || "";
+    document.getElementById('edit-end-time').value = topic.timeEnd || "";
+    document.getElementById('edit-time').value = topic.thoiGian || "";
+    document.getElementById('edit-so-cau').value = topic.soCau || 0; 
+    document.getElementById('edit-desc').value = topic.moTa || "";
+};
+
+app.updateTopic = function() {
+    var obj = { ma: document.getElementById('edit-id').value, ten: document.getElementById('edit-name').value, pass: document.getElementById('edit-pass').value, time: document.getElementById('edit-time').value, mota: document.getElementById('edit-desc').value, mon: document.getElementById('edit-mon').value, khoi: document.getElementById('edit-khoi').value, timeStart: document.getElementById('edit-start-time').value, timeEnd: document.getElementById('edit-end-time').value, viewMode: document.getElementById('edit-view-mode').value, soCau: document.getElementById('edit-so-cau').value };
+    if (!obj.ma || !obj.ten) { alert("Thiếu thông tin Mã hoặc Tên!"); return; }
+    var btn = document.getElementById('btn-update-topic'); btn.disabled = true; btn.innerText = "Đang lưu...";
+    google.script.run.withSuccessHandler(res => { btn.disabled = false; btn.innerText = "Lưu Cập Nhật"; alert(res.msg); if (res.success) { document.getElementById('modal-edit-topic').style.display = 'none'; app.loadDataAndRender(); } }).suaChuDe(obj, app.accountID, app.currentPass);
+};
+
+app.saveNewTopic = function() {
+    let ma = document.getElementById('new-id').value, ten = document.getElementById('new-name').value;
+    let pass = document.getElementById('new-pass').value, time = document.getElementById('new-time').value, mota = document.getElementById('new-desc').value;
+    let mon = document.getElementById('new-mon').value, khoi = document.getElementById('new-khoi').value;
+    let timeStart = document.getElementById('new-start-time').value, timeEnd = document.getElementById('new-end-time').value;
+    let viewMode = document.getElementById('new-view-mode').value;
+    let soCau = document.getElementById('new-so-cau').value; 
+    if (!ma || !ten) { alert("Thiếu thông tin Mã hoặc Tên!"); return; }
+    let btn = document.getElementById('btn-save-topic'); btn.disabled = true; btn.innerText = "Đang lưu...";
+    google.script.run.withSuccessHandler(res => { btn.disabled = false; btn.innerText = "Lưu"; alert(res.msg); if (res.success) { app.closeAddModal(); app.loadDataAndRender(); } }).themChuDeMoi({ma, ten, pass, time, mota, mon, khoi, timeStart, timeEnd, viewMode, soCau}, app.accountID, app.currentPass);
+};
+
+app.deleteTopic = function(id, name) { if (confirm(`Xóa chủ đề: "${name}"? Mọi câu hỏi sẽ bị xóa!`)) google.script.run.withSuccessHandler(res => { alert(res.msg); app.loadDataAndRender(); }).xoaChuDe(id, app.accountID, app.currentPass); };
+
+app.closeStatsModal = function() { document.getElementById('modal-stats').style.display = 'none'; };
+app.openImportModal = function(id, name) { app.topicIdForAdd = id; document.getElementById('modal-import-latex').style.display = 'flex'; document.getElementById('import-title').innerText = `Thêm câu hỏi: ${name}`; };
+app.closeImportModal = function() { document.getElementById('modal-import-latex').style.display = 'none'; };
+app.processLatex = function() { let raw = document.getElementById('latex-input').value; let qs = app.parseLatex(raw); if(qs.length === 0) { alert("Không tìm thấy câu hỏi!"); return; } if(confirm(`Lưu ${qs.length} câu hỏi?`)) google.script.run.withSuccessHandler(res => { alert(res.msg); if(res.success) app.closeImportModal(); }).luuCauHoiTuLatex(app.topicIdForAdd, qs, app.accountID, app.currentPass); };
+app.parseLatex = function(text) { const regexEx = /\\begin\{ex\}([\s\S]*?)\\end\{ex\}/gm; let matches, results = []; function extractBracedContent(str) { let contents = [], current = "", depth = 0, started = false; for (let char of str) { if (char === '{') { if (depth === 0) started = true; depth++; if(depth===1) continue;} else if (char === '}') { depth--; if (depth === 0 && started) { contents.push(current); current = ""; started = false; continue; } } if (started) current += char; } return contents; } while ((matches = regexEx.exec(text)) !== null) { let content = matches[1], explain = ""; let idxLoigiai = content.indexOf('\\loigiai'); if (idxLoigiai !== -1) { let giaiData = content.substring(idxLoigiai).replace('\\loigiai', ''); let giaiArr = extractBracedContent(giaiData); if(giaiArr.length) explain = app.formatText(giaiArr[0].trim()); content = content.substring(0, idxLoigiai); } let parts = content.split(/\\choice/), qText = parts[0].trim(); qText = app.formatText(qText); if (parts.length < 2) continue; let cleanOpts = [], correct = ""; extractBracedContent(parts[1]).forEach(opt => { let val = opt.trim(); if (val.includes("\\True")) { val = val.replace("\\True", "").trim(); correct = app.formatText(val); } else { val = app.formatText(val); } if(val) cleanOpts.push(val); }); if(cleanOpts.length) { let finalCorrect = correct || cleanOpts[0]; results.push({ question: qText, options: cleanOpts, correct: finalCorrect, explain: explain }); } } return results; };
+
+// --- ĐÃ SỬA: Hàm hiển thị thống kê (Dùng UID để xem chi tiết) ---
+app.viewStats = function(id, name) { 
+    document.getElementById('modal-stats').style.display = 'flex'; 
+    document.getElementById('stats-title').innerText = `Thống kê: ${name}`; 
+    document.getElementById('stats-content').innerHTML = "<p style='text-align:center'>Đang tải dữ liệu chi tiết...</p>"; 
+    app.currentStatsName = name; 
+    app.currentStatsID = id; 
+    google.script.run.withSuccessHandler(res => { 
+        let contentDiv = document.getElementById('stats-content'); 
+        if (!res.success) { contentDiv.innerHTML = res.msg; return; } 
+        app.currentStatsData = res.list; 
+        
+        // Vẽ Chart và các box thống kê (giữ nguyên)
+        let html = `<div class="chart-container"><canvas id="scoreChart"></canvas></div><div class="stats-grid"><div class="stats-box"><div class="stats-val" style="color:#2563eb">${res.total}</div><div class="stats-lbl">Lượt thi</div></div><div class="stats-box"><div class="stats-val" style="color:#059669">${res.avg}</div><div class="stats-lbl">Trung bình</div></div><div class="stats-box"><div class="stats-val" style="color:#d97706">${res.median}</div><div class="stats-lbl">Trung vị</div></div><div class="stats-box"><div class="stats-val" style="color:#7c3aed">${res.mode}</div><div class="stats-lbl">Mốt (Mode)</div></div><div class="stats-box"><div class="stats-val" style="color:#dc2626">${res.min}</div><div class="stats-lbl">Thấp nhất</div></div><div class="stats-box"><div class="stats-val" style="color:#16a34a">${res.max}</div><div class="stats-lbl">Cao nhất</div></div></div><h4 style="margin:0 0 10px 0; border-left:4px solid #2563eb; padding-left:10px;">Danh sách chi tiết</h4><div style="max-height:300px; overflow-y:auto; border:1px solid #e5e7eb; border-radius:8px;"><table style="width:100%; border-collapse:collapse; font-size:0.9em;"><thead style="background:#f3f4f6; position:sticky; top:0;"><tr><th style="padding:10px; text-align:left; border-bottom:2px solid #ddd">Học sinh</th><th style="padding:10px; text-align:center; border-bottom:2px solid #ddd">Điểm</th><th style="padding:10px; text-align:center; border-bottom:2px solid #ddd">Số câu</th><th style="padding:10px; text-align:center; border-bottom:2px solid #ddd">Thời gian</th><th style="padding:10px; text-align:center; border-bottom:2px solid #ddd; color:#d97706">Thoát Tab</th><th style="padding:10px; text-align:center; border-bottom:2px solid #ddd">Hành động</th></tr></thead><tbody>`; 
+        
+        res.list.forEach(item => { 
+            let color = item.diem10 >= 5 ? '#059669' : '#dc2626'; 
+            let cheatColor = item.viPham > 0 ? 'color:#dc2626; font-weight:bold' : 'color:#ccc'; 
+            
+            // --- SỬA Ở ĐÂY: Ưu tiên dùng UID, nếu không có thì dùng tên ---
+            let userID = item.uid ? item.uid : item.ten;
+
+            html += `<tr style="border-bottom:1px solid #eee;"><td style="padding:8px 10px;"><b>${item.ten}</b><br><span style="color:#666; font-size:0.85em">Lần thi: ${item.lan}</span></td><td style="padding:8px 10px; text-align:center; font-weight:bold; color:${color}">${item.diem10}</td><td style="padding:8px 10px; text-align:center;">${item.diem}/${item.tongCau}</td><td style="padding:8px 10px; text-align:center;">${item.tgLam}</td><td style="padding:8px 10px; text-align:center; ${cheatColor}">${item.viPham}</td><td style="padding:8px 10px; text-align:center;"><button onclick="app.reviewStudentExam('${app.currentStatsID}', '${userID}', '${item.ten}', ${item.lan})" style="background:#2563eb; color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:0.8em">👁️ Xem bài</button></td></tr>`; 
+        }); 
+        
+        html += `</tbody></table></div>`; 
+        contentDiv.innerHTML = html; 
+        app.renderChart(res.spectrum); 
+    }).layThongKe(id); 
+};
+
+// --- ĐÃ SỬA: Nhận userID để gọi về server ---
+app.reviewStudentExam = function(maChuDe, userID, displayName, lanThu) { 
+    let btn = event.target; 
+    let originalText = btn.innerText; 
+    btn.innerText = "⌛"; 
+    btn.disabled = true; 
+    
+    // Gọi hàm server với userID
+    google.script.run.withSuccessHandler(res => { 
+        btn.innerText = originalText; 
+        btn.disabled = false; 
+        if(!res.success) { alert(res.msg); return; } 
+        
+        document.getElementById('modal-review-student').style.display = 'flex'; 
+        let div = document.getElementById('review-student-content'); 
+        
+        // Hiển thị Tên trên giao diện
+        let html = `<div style="margin-bottom:15px; font-weight:bold; color:#555">Học sinh: ${displayName} - Lần thi: ${lanThu}</div>`; 
+        
+        res.data.forEach((q, i) => { 
+            let color = q.ok ? "#dcfce7" : "#fee2e2"; 
+            let border = q.ok ? "#86efac" : "#fca5a5"; 
+            let status = q.ok ? "✅ ĐÚNG" : "❌ SAI"; 
+            html += `<div style="background:${color}; border:1px solid ${border}; padding:10px; border-radius:8px; margin-bottom:10px;"><div style="font-weight:bold; margin-bottom:5px;">Câu ${i+1}: ${status}</div><div style="margin-bottom:5px;">${app.formatText(q.q)}</div><div style="font-size:0.9em; color:#1e40af">➡ HS chọn: <b>${app.formatText(q.a || '(Không chọn)')}</b></div><div style="font-size:0.9em; color:#166534">➡ Đáp án đúng: <b>${app.formatText(q.c)}</b></div></div>`; 
+        }); 
+        div.innerHTML = html; 
+        if(window.MathJax) MathJax.typesetPromise(); 
+    }).layChiTietBaiLamHocSinh(maChuDe, userID, lanThu); 
+};
+
+app.renderChart = function(dataArray) { if(app.myChart) { app.myChart.destroy(); } var ctx = document.getElementById('scoreChart').getContext('2d'); var gradient = ctx.createLinearGradient(0, 0, 0, 400); gradient.addColorStop(0, 'rgba(37, 99, 235, 0.5)'); gradient.addColorStop(1, 'rgba(37, 99, 235, 0.0)'); app.myChart = new Chart(ctx, { type: 'line', data: { labels: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'], datasets: [{ label: 'Số lượng bài thi', data: dataArray, borderColor: '#2563eb', backgroundColor: gradient, borderWidth: 3, pointBackgroundColor: '#fff', pointBorderColor: '#2563eb', pointRadius: 5, pointHoverRadius: 7, fill: true, tension: 0.4 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: '#f3f4f6' } }, x: { grid: { display: false } } }, plugins: { title: { display: true, text: 'PHỔ ĐIỂM CHI TIẾT', font: {size: 14} }, legend: { display: false }, tooltip: { mode: 'index', intersect: false } }, interaction: { mode: 'nearest', axis: 'x', intersect: false } } }); };
+app.exportToExcel = function() { if(!app.currentStatsData || app.currentStatsData.length === 0) { alert("Không có dữ liệu!"); return; } let csvContent = "\uFEFFNgày nộp,Họ và tên,Lần thi,Số câu đúng,Tổng số câu,Điểm (thang 10),Thời gian làm bài,Số lần thoát tab\n"; app.currentStatsData.forEach(row => { csvContent += `${row.ngay},"${row.ten}",${row.lan},${row.diem},${row.tongCau},${row.diem10},"${row.tgLam}",${row.viPham}\n`; }); let encodedUri = encodeURI("data:text/csv;charset=utf-8," + csvContent); let link = document.createElement("a"); link.setAttribute("href", encodedUri); let fileName = app.currentStatsName ? app.currentStatsName.replace(/\s+/g, '_') : "Thong_ke"; link.setAttribute("download", `Ket_qua_${fileName}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); };
+app.processExportPDF = function() { if(!app.currentStatsID) return; let btn = document.getElementById('btn-export-pdf'); let originalText = btn.innerHTML; btn.disabled = true; btn.innerHTML = "⏳ Đang tạo PDF..."; google.script.run.withSuccessHandler(res => { btn.disabled = false; btn.innerHTML = originalText; if(res.success) { const linkSource = `data:application/pdf;base64,${res.data}`; const downloadLink = document.createElement("a"); downloadLink.href = linkSource; downloadLink.download = res.filename; downloadLink.click(); } else { alert(res.msg); } }).xuatPDF(app.currentStatsID); };
+app.toggleHistory = function(btn) { let p = btn.parentElement.nextElementSibling; if(p.style.maxHeight){ p.style.maxHeight=null; btn.innerHTML=btn.innerHTML.replace('▲','▼'); } else { p.style.maxHeight=p.scrollHeight+"px"; btn.innerHTML=btn.innerHTML.replace('▼','▲'); } };
+</script>

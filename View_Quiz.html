@@ -1,0 +1,60 @@
+<div id="view-quiz" style="display:none">
+  <div style="display:flex; justify-content: space-between; align-items: center; position:sticky; top:0; background:white; z-index:100; padding:10px 0; border-bottom:1px solid #eee; margin-bottom: 20px;">
+    <button class="btn btn-back" onclick="app.backToDash()" style="margin:0">⬅ Quay lại</button>
+    <div style="text-align:right">
+      <div style="font-size:0.8em; color:#6b7280">Thời gian còn lại</div>
+      <div id="quiz-timer" style="font-weight:bold; font-size:1.4em; color:#2563eb; font-family:monospace">00:00</div>
+    </div>
+  </div>
+
+  <h2 id="quiz-title" style="color:#111827; margin-bottom:10px;">Bài làm</h2>
+  
+  <div class="quiz-layout">
+    <div class="quiz-main">
+      <div id="quiz-inventory" class="inventory-bar" style="display:none"></div>
+      
+      <div id="loading">Đang tải dữ liệu...</div>
+      
+      <div id="result-header" style="display:none; text-align:center; margin-bottom:20px; padding:20px; background:#f0f9ff; border-radius:12px; border:2px solid #2563eb">
+        <h3 id="score-text" style="margin:0; font-size:2em; color:#2563eb"></h3>
+        <div style="margin-top:5px; color:#555">Xem chi tiết đúng/sai bên dưới</div>
+      </div>
+
+      <div id="quiz-container"></div>
+      
+      <button id="btn-submit" class="btn" onclick="app.submitQuiz()" style="display:none; margin-top:30px; background:#059669">NỘP BÀI</button>
+    </div>
+    
+    <div class="quiz-sidebar">
+      <div class="nav-panel">
+        <h4 style="margin-top:0; margin-bottom:10px; color:#4b5563; font-size:0.9em; text-transform:uppercase; letter-spacing:0.5px;">Danh sách câu hỏi</h4>
+        <div id="quiz-nav-grid" class="nav-grid"></div>
+        <div style="margin-top:15px; font-size:0.8em; color:#666">
+          <span style="display:inline-block; width:10px; height:10px; background:#fff; border:1px solid #ccc; margin-right:5px"></span>Chưa làm<br>
+          <span style="display:inline-block; width:10px; height:10px; background:#2563eb; margin-right:5px"></span>Đã chọn
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="floating-backpack" class="floating-backpack" onclick="app.openQuizInventory()" title="Mở Túi Đồ">
+    🎒
+    <div id="backpack-count" class="backpack-badge" style="display:none">0</div>
+  </div>
+
+  <div id="modal-quiz-inventory" class="modal-overlay" style="z-index: 2000;">
+    <div class="modal-content" style="max-width: 600px; background: #f3f4f6;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+          <h3 style="margin:0; color:#d97706; display:flex; align-items:center; gap:10px;">
+            🎒 Túi Thần Kỳ 
+            <span style="font-size:0.6em; color:#666; font-weight:normal">(Chạm vào vật phẩm để dùng)</span>
+          </h3>
+          <button onclick="document.getElementById('modal-quiz-inventory').style.display='none'" style="border:none; background:none; font-size:2em; line-height:0.5; cursor:pointer;">&times;</button>
+      </div>
+      
+      <div id="quiz-inventory-grid" class="inventory-grid">
+         </div>
+    </div>
+  </div>
+
+</div>

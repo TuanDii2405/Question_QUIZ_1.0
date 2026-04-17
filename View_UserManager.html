@@ -1,0 +1,82 @@
+<div id="view-user-manager" style="display:none; margin-top: 20px;">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+    <h3 style="margin:0; color:#b91c1c; display:flex; align-items:center; gap:8px;">🛡️ QUẢN LÝ TÀI KHOẢN (ADMIN)</h3>
+    <div style="display:flex; gap:5px;">
+      <button onclick="app.viewOnlineStatus()" class="btn" style="background:#0284c7; width:auto; padding:8px 12px; font-size:0.9em;">👁️ Ai đang Online?</button>
+      <button onclick="app.openUserModal()" class="btn" style="background:#059669; width:auto; padding:8px 15px; font-size:0.9em;">+ Thêm User</button>
+      <button onclick="app.loadUserList()" class="btn-refresh" title="Tải lại">↻</button>
+    </div>
+  </div>
+  
+  <div style="overflow-x:auto; border:1px solid #e5e7eb; border-radius:8px; background:white;">
+    <table style="width:100%; border-collapse:collapse; font-size:0.9em;">
+      <thead style="background:#f3f4f6; color:#374151;">
+        <tr>
+          <th style="padding:12px; border-bottom:2px solid #ddd;">ID</th>
+          <th style="padding:12px; border-bottom:2px solid #ddd;">Tên</th>
+          <th style="padding:12px; border-bottom:2px solid #ddd;">Quyền</th>
+          <th style="padding:12px; border-bottom:2px solid #ddd;">Chat</th>
+          <th style="padding:12px; border-bottom:2px solid #ddd;">Môn được giao</th>
+          <th style="padding:12px; border-bottom:2px solid #ddd;">Khối được giao</th>
+          <th style="padding:12px; border-bottom:2px solid #ddd;">Hành động</th>
+        </tr>
+      </thead>
+      <tbody id="user-list-body"></tbody>
+    </table>
+  </div>
+
+  <div id="modal-user" class="modal-overlay">
+    <div class="modal-content" style="max-width: 600px;">
+      <h3 id="modal-user-title" style="margin-top:0; color:#2563eb">Thêm Tài Khoản</h3>
+      
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px;">
+        <div><label>ID Tài khoản:</label><input type="text" id="u-id" class="inp" placeholder="user@example.com"></div>
+        <div><label>Mật khẩu:</label><input type="text" id="u-pass" class="inp" placeholder="******"></div>
+      </div>
+      
+      <label>Họ và Tên:</label><input type="text" id="u-name" class="inp" placeholder="Nguyễn Văn A">
+      
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-top:10px;">
+        <div>
+          <label>Phân quyền:</label>
+          <select id="u-role" class="inp">
+            <option value="Student">Student (Học sinh)</option>
+            <option value="Teacher">Teacher (Giáo viên)</option>
+            <option value="Admin">Admin (Quản trị)</option>
+          </select>
+        </div>
+        <div><label>Cho phép Chat:</label><select id="u-chat" class="inp"><option value="Yes">Yes</option><option value="No">No</option></select></div>
+      </div>
+
+      <div style="background:#f0f9ff; padding:15px; border-radius:8px; margin-top:15px; border:1px solid #bae6fd">
+        <label style="color:#0369a1; font-weight:bold; display:block; margin-bottom:10px;">Phân quyền dữ liệu (Chỉ Admin xem tất cả):</label>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+           <div>
+             <label style="margin-bottom:5px;">Chọn Môn Học:</label>
+             <div id="container-mon" class="checkbox-container"><div style="color:#999; font-style:italic">Đang tải danh sách...</div></div>
+           </div>
+           <div>
+             <label style="margin-bottom:5px;">Chọn Khối Lớp:</label>
+             <div id="container-khoi" class="checkbox-container"><div style="color:#999; font-style:italic">Đang tải danh sách...</div></div>
+           </div>
+        </div>
+        <div style="font-size:0.8em; color:#666; margin-top:5px;">* Nếu không chọn gì = Được xem tất cả.</div>
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:20px; justify-content:flex-end;">
+        <button onclick="app.saveUser()" id="btn-save-user" class="btn" style="background:#2563eb; width:auto;">Lưu lại</button>
+        <button onclick="document.getElementById('modal-user').style.display='none'" class="btn" style="background:#9ca3af; width:auto;">Hủy</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-online-status" class="modal-overlay">
+    <div class="modal-content" style="max-width: 500px;">
+       <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:15px;">
+           <h3 style="margin:0; color:#0284c7">Danh sách Online</h3>
+           <button onclick="document.getElementById('modal-online-status').style.display='none'" style="border:none; background:none; font-size:1.5em; cursor:pointer;">&times;</button>
+       </div>
+       <div id="online-status-content" style="max-height: 60vh; overflow-y: auto;"></div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,117 @@
+<script>
+// --- GAMIFICATION & REAL-TIME MODULE ---
+
+// Mở Bảng Xếp Hạng
+app.openLeaderboard = function() {
+    document.getElementById('modal-leaderboard').style.display = 'flex';
+    app.loadLeaderboardData();
+};
+
+// Đóng Bảng Xếp Hạng
+app.closeLeaderboard = function() {
+    document.getElementById('modal-leaderboard').style.display = 'none';
+};
+
+// Tải dữ liệu Bảng Xếp Hạng
+app.loadLeaderboardData = function() {
+    google.script.run.withSuccessHandler(function(data) {
+      var html = "";
+      if (data.length === 0) { 
+          html = '<tr><td colspan="4" style="text-align:center; padding:20px; color:#666">Chưa có vị đạo hữu nào xuất hiện.</td></tr>'; 
+      } else {
+        data.forEach(function(u, index) {
+          var rank = index + 1; 
+          var rowClass = rank === 1 ? 'top-1' : (rank === 2 ? 'top-2' : (rank === 3 ? 'top-3' : '')); 
+          var rankDisplay = `<span class="rank-badge">${rank}</span>`;
+          
+          var icon = ""; 
+          if(u.role.toLowerCase() === 'admin') icon = "🛡️"; 
+          else if(u.role.toLowerCase() === 'teacher') icon = "⚡";
+
+          var progressHtml = `
+            <div style="width:100%; background:#e5e7eb; height:4px; border-radius:2px; margin-top:5px; overflow:hidden;">
+               <div style="width:${u.percent || 0}%; background:#2563eb; height:100%;"></div>
+            </div>
+            <div style="font-size:0.65em; color:#888; text-align:right; margin-top:2px;">Đột phá: ${u.percent || 0}%</div>
+          `;
+
+          html += `<tr class="${rowClass}">
+            <td style="text-align:center;">${rankDisplay}</td>
+            <td>
+              <div class="user-info">
+                <span style="font-weight:600; color:#333">${icon} ${u.name}</span>
+                <span style="font-size:0.75em; color:#666">Đã vượt ${u.examCount} kiếp nạn</span>
+              </div>
+            </td>
+            <td>
+              <span class="realm-tag ${u.rankClass}">${u.realm}</span>
+              ${progressHtml}
+            </td>
+            <td style="text-align:center; font-weight:bold; color:#2563eb; font-family:monospace; font-size:1.1em;">
+              ${u.totalScore}
+            </td>
+          </tr>`;
+        });
+      }
+      document.getElementById('lb-list').innerHTML = html;
+    }).layDuLieuBangXepHang();
+};
+
+// --- CHẠY CHỮ TOP ONLINE (CẬP NHẬT: 30S MỘT LẦN) ---
+app.startOnlineTracking = function(userName) {
+    if (app.onlineInterval) clearInterval(app.onlineInterval);
+    
+    const runCheck = () => {
+      if (!app.user) return; 
+      
+      google.script.run.withSuccessHandler(messages => {
+        let marqueeBox = document.getElementById('marquee-box');
+        let marqueeContent = document.getElementById('marquee-content');
+        
+        if (messages && messages.length > 0) {
+          // 1. Cập nhật nội dung
+          let text = messages.join(" &nbsp;&nbsp;&nbsp; 🔥 &nbsp;&nbsp;&nbsp; ");
+          marqueeContent.innerHTML = text; 
+          
+          // 2. Hiện thanh thông báo
+          marqueeBox.style.display = 'flex';
+          
+          // 3. Tự động ẩn sau 15 giây (để tạo khoảng nghỉ)
+          setTimeout(() => {
+              marqueeBox.style.display = 'none';
+          }, 15000); // Hiện 15s rồi ẩn đi
+          
+        } else { 
+          marqueeBox.style.display = 'none'; 
+        }
+      }).heartBeatSystem(userName); 
+    };
+
+    runCheck(); // Chạy ngay lần đầu
+    app.onlineInterval = setInterval(runCheck, 30000); // Lặp lại quy trình mỗi 30s
+};
+
+// Xem trạng thái Online (Dành cho Admin)
+app.viewOnlineStatus = function() {
+     document.getElementById('modal-online-status').style.display = 'flex';
+     let div = document.getElementById('online-status-content');
+     div.innerHTML = "<p>Đang tải dữ liệu...</p>";
+     
+     google.script.run.withSuccessHandler(list => {
+         if(!list || list.length === 0) { div.innerHTML = "<p>Chưa có dữ liệu.</p>"; return; }
+         
+         let html = '<table style="width:100%; border-collapse:collapse;"><thead><tr><th style="text-align:left; padding:5px; border-bottom:1px solid #ccc">Tên</th><th style="padding:5px; border-bottom:1px solid #ccc">Trạng thái</th><th style="text-align:right; padding:5px; border-bottom:1px solid #ccc">Thời gian</th></tr></thead><tbody>';
+         
+         list.forEach(u => {
+             html += `<tr>
+                <td style="padding:8px 5px; border-bottom:1px solid #eee"><b>${u.name}</b> <span style="font-size:0.8em; color:#666">(${u.role})</span></td>
+                <td style="padding:8px 5px; text-align:center; border-bottom:1px solid #eee">${u.status}</td>
+                <td style="padding:8px 5px; text-align:right; border-bottom:1px solid #eee; font-size:0.9em; color:#555">${u.time}</td>
+             </tr>`;
+         });
+         
+         html += '</tbody></table>';
+         div.innerHTML = html;
+     }).layDanhSachTrangThaiOnline(app.accountID, app.currentPass);
+};
+</script>

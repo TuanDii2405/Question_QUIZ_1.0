@@ -1,0 +1,18 @@
+<div id="chat-widget-container" style="display:none; position: fixed; bottom: 100px; right: 90px; z-index: 9998; font-family: sans-serif;">
+  
+  <div id="chat-box" style="display: none; width: 320px; height: 450px; background: white; border-radius: 12px; box-shadow: 0 5px 20px rgba(0,0,0,0.2); flex-direction: column; overflow: hidden; margin-bottom: 10px; border: 1px solid #e5e7eb;">
+    <div style="background: #2563eb; color: white; padding: 12px; font-weight: bold; display: flex; justify-content: space-between; align-items: center;">
+        <span>Trao đổi / Thảo luận</span>
+        <span onclick="app.toggleChat()" style="cursor: pointer; font-size: 18px;">&times;</span>
+    </div>
+    
+    <div id="chat-messages" style="flex: 1; padding: 10px; overflow-y: auto; background: #f9fafb; display: flex; flex-direction: column; gap: 8px;">
+        <div style="text-align: center; color: #999; font-size: 0.85em; margin-top: 50%;">Đang tải tin nhắn...</div>
+    </div>
+    
+    <div style="padding: 10px; border-top: 1px solid #eee; display: flex; gap: 5px; background: white;">
+        <input type="text" id="chat-input" placeholder="Nhập tin nhắn..." style="flex: 1; padding: 8px; border: 1px solid #d1d5db; border-radius: 20px; outline: none; font-size: 14px;" onkeypress="if(event.keyCode==13) app.sendChat()">
+        <button onclick="app.sendChat()" style="background: #2563eb; color: white; border: none; padding: 8px 12px; border-radius: 50%; cursor: pointer;">➤</button>
+    </div>
+  </div>
+</div>

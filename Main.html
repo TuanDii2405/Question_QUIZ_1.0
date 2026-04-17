@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trắc Nghiệm Online</title>
+  <script>window.MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] }, startup: { typeset: false } };</script>
+  <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <?!= include('Style'); ?>
+</head>
+<body>
+  <div id="marquee-box" class="marquee-container"><div id="marquee-content" class="marquee-content"></div></div>
+
+  <div class="app-wrapper">
+    <div class="container">
+      <img src="https://i.ibb.co/mrjMS8Cv/N-n-Sway.jpg" class="site-logo" alt="Logo" onerror="this.src='https://via.placeholder.com/80'"> 
+      
+      <?!= include('View_Login'); ?>
+      <?!= include('View_Dashboard'); ?>
+      <?!= include('View_UserManager'); ?>
+      <?!= include('View_Quiz'); ?>
+      <?!= include('View_Chat'); ?>
+      <?!= include('View_Leaderboard'); ?>
+      
+    </div>
+  </div>
+  
+  <?!= include('Script_Core'); ?>
+  <?!= include('Script_Data'); ?>
+  <?!= include('Script_Admin'); ?>
+  <?!= include('Script_Quiz'); ?>
+  <?!= include('Script_Gamification'); ?>
+  <?!= include('Script_Chat'); ?>
+  <?!= include('Script_Spin'); ?> 
+</body>
+</html>

@@ -1,0 +1,263 @@
+<script>
+// --- QUIZ LOGIC ---
+
+app.prepareStart = function(id, name, pass, time, startStr, endStr) { 
+    let now = new Date(); 
+    if (startStr && startStr !== "undefined" && startStr !== "") { if (now < new Date(startStr)) { alert("Chưa đến giờ làm bài!"); return; } } 
+    if (endStr && endStr !== "undefined" && endStr !== "") { if (now > new Date(endStr)) { alert("Đã hết thời gian làm bài!"); return; } } 
+    if (pass && pass !== "") { let ip = prompt(`Mật khẩu bài "${name}":`); if (ip !== pass) { alert("Sai mật khẩu!"); return; } } 
+    app.startQuiz(id, name, time); 
+};
+
+app.startQuiz = function(id, name, time) { 
+    app.curTopic = id; 
+    app.startTime = new Date(); 
+    document.getElementById('quiz-title').innerText = name; 
+    app.showView('view-quiz'); 
+    
+    // Reset giao diện
+    document.getElementById('quiz-container').innerHTML = ""; 
+    document.getElementById('quiz-nav-grid').innerHTML = ""; 
+    document.getElementById('loading').style.display = 'block'; 
+    document.getElementById('btn-submit').style.display = 'none'; 
+    document.getElementById('result-header').style.display = 'none'; 
+    document.getElementById('btn-submit').innerText = "NỘP BÀI"; 
+    document.getElementById('btn-submit').disabled = false; 
+    document.getElementById('btn-submit').style.opacity = "1";
+    
+    // Reset cờ trạng thái nộp
+    app.isSubmitting = false; 
+
+    app.startTimer((parseInt(time)||45)*60); 
+    app.enableAntiCheat(); 
+    if(app.renderInventoryBar) app.renderInventoryBar(); 
+    
+    google.script.run
+        .withSuccessHandler(app.renderQuiz)
+        .withFailureHandler(function(err) {
+            document.getElementById('loading').style.display = 'none';
+            alert("❌ LỖI TẢI CÂU HỎI:\n" + err.message);
+        })
+        .layDanhSachCauHoi(id); 
+};
+
+app.renderQuiz = function(qs) {
+    let c = document.getElementById('quiz-container'); 
+    let navContainer = document.getElementById('quiz-nav-grid'); 
+    let html = "", navHtml = "", lbl = ['A','B','C','D','E']; 
+    
+    document.getElementById('loading').style.display = 'none';
+    if(!qs || qs.length === 0) { c.innerHTML = "<div style='text-align:center; padding:20px; color:#dc2626'>⚠️ Không tìm thấy câu hỏi!</div>"; return; }
+    
+    app.curQCount = qs.length; app.currentQIds = []; 
+    
+    qs.forEach((q, i) => { 
+        app.currentQIds.push(q.id); 
+        let displayQText = app.formatText(q.question); 
+        html += `<div class="question-box" id="box-${i}"><div class="q-text">Câu ${i+1}: ${displayQText}</div>`; 
+        q.options.forEach((o, j) => { 
+            let safeVal = o.replace(/"/g,'&quot;'); 
+            let displayOpt = app.formatText(o); 
+            html += `<label class="opt-label" onclick="app.selectOption(this, ${i})"><input type="radio" name="q_${i}" value="${safeVal}"><span><b>${lbl[j]}.</b> ${displayOpt}</span></label>`; 
+        }); 
+        html += `<div class="explain-box" id="explain-${i}"></div></div>`; 
+        navHtml += `<div class="nav-item" id="nav-btn-${i}" onclick="app.scrollToQuestion(${i})">${i+1}</div>`; 
+    });
+    c.innerHTML = html; navContainer.innerHTML = navHtml; document.getElementById('btn-submit').style.display = 'block'; 
+    if(window.MathJax) MathJax.typesetPromise();
+};
+
+app.selectOption = function(lbl, index) { 
+    if(document.getElementById('btn-submit').style.display === 'none') return; 
+    lbl.closest('.question-box').querySelectorAll('.opt-label').forEach(e => e.classList.remove('selected')); 
+    lbl.classList.add('selected'); lbl.querySelector('input').checked = true; 
+    let navBtn = document.getElementById(`nav-btn-${index}`); if (navBtn) navBtn.classList.add('answered'); 
+};
+
+app.scrollToQuestion = function(index) { 
+    let box = document.getElementById(`box-${index}`); 
+    if (box) { box.scrollIntoView({ behavior: 'smooth', block: 'center' }); box.style.border = "2px solid #2563eb"; setTimeout(() => { box.style.border = "1px solid #e5e7eb"; }, 1500); } 
+};
+
+// --- HÀM NỘP BÀI ---
+app.submitQuiz = function(force = false) { 
+    if (app.isSubmitting) return;
+
+    if(!force && app.timeLeft > 0 && !confirm("Bạn chắc chắn muốn nộp bài?")) return; 
+    
+    app.isSubmitting = true;
+    app.disableAntiCheat(); 
+    clearInterval(app.timerInterval); 
+    
+    let ans = []; for(let i=0; i<app.curQCount; i++) { let chk = document.querySelector(`input[name="q_${i}"]:checked`); ans.push(chk ? chk.value : ""); } 
+    
+    let btn = document.getElementById('btn-submit'); 
+    btn.innerText = "⏳ ĐANG CHẤM... (Vui lòng đợi)"; 
+    btn.disabled = true; 
+    btn.style.opacity = "0.7";
+    btn.style.cursor = "wait";
+    
+    google.script.run.withSuccessHandler(res => { 
+        setTimeout(() => {
+            app.isSubmitting = false; 
+            btn.style.cursor = "pointer";
+            
+            if (res.success === false) { 
+                alert(res.msg); 
+                app.backToDash(); 
+            } else { 
+                app.showResult(res); 
+            }
+        }, 2000); 
+
+    }).withFailureHandler(err => {
+        app.isSubmitting = false;
+        btn.innerText = "NỘP BÀI";
+        btn.disabled = false;
+        btn.style.opacity = "1";
+        btn.style.cursor = "pointer";
+        alert("Lỗi kết nối: " + err.message);
+    })
+    .xuLyChamDiem(ans, app.currentQIds, app.curTopic, app.accountID, app.startTime.toISOString(), app.violationCount); 
+};
+
+
+app.showResult = function(res) {
+    document.getElementById('btn-submit').style.display = 'none'; 
+    document.getElementById('result-header').style.display = 'block';
+    
+    if (res.viewMode === 'hidden') { 
+        document.getElementById('score-text').innerHTML = "<span style='color:#059669'>NỘP BÀI THÀNH CÔNG!</span>"; 
+        document.querySelectorAll('.question-box input').forEach(i => i.disabled = true); 
+        return; 
+    }
+
+    // 1. Xác định trọng số điểm mỗi câu (Hệ 10)
+    let diemMoiCau = res.tongCau > 0 ? (10 / res.tongCau) : 0;
+
+    // 2. Đếm số câu sai (chỉ tính những câu có chọn đáp án nhưng sai)
+    let soCauSai = 0;
+    res.chiTiet.forEach((item, index) => {
+        let box = document.getElementById(`box-${index}`);
+        let userRadio = box.querySelector(`input:checked`);
+        if (userRadio && !item.isCorrect) {
+            soCauSai++;
+        }
+    });
+
+    // 3. Tính điểm hệ 10: (Số câu đúng * Trọng số) - (Số câu sai * Trọng số)
+    let diemHe10 = (res.tongDiem * diemMoiCau) - (soCauSai * diemMoiCau);
+    
+    let modeMsg = res.viewMode === 'score_only' ? '<br><i style="font-size:0.6em; color:#d97706">(Chế độ chỉ hiện điểm)</i>' : '';
+    
+    // 4. Hiển thị điểm số và thống kê
+    document.getElementById('score-text').innerHTML = 
+        `ĐIỂM: ${diemHe10.toFixed(2)} ${modeMsg} 
+         <br>
+         <span style="font-size:0.45em; font-weight:normal; color:#4b5563">
+            (Đúng ${res.tongDiem} - Sai ${soCauSai} / Tổng ${res.tongCau} câu)
+            <br>
+            <i style="color:#6b7280; font-size:0.9em">* Mỗi câu đúng +${diemMoiCau.toFixed(2)}, sai -${diemMoiCau.toFixed(2)} (không chọn 0đ)</i>
+         </span>`;
+
+    document.querySelector('.container').scrollIntoView();
+    
+    // 5. Render chi tiết từng câu hỏi (Đúng/Sai/Giải thích)
+    res.chiTiet.forEach((item, index) => {
+       let box = document.getElementById(`box-${index}`); 
+       let explainDiv = document.getElementById(`explain-${index}`); 
+       let userRadio = box.querySelector(`input:checked`); 
+       box.querySelectorAll('input').forEach(i => i.disabled = true);
+       
+       if (res.viewMode === 'score_only') { 
+           // Chế độ chỉ hiện điểm: chỉ đánh dấu câu đúng nếu người dùng chọn đúng
+           if (item.isCorrect && userRadio) { 
+               userRadio.parentElement.style.border = "1px solid green"; 
+               userRadio.parentElement.innerHTML += ' ✅'; 
+           } 
+       } else { 
+           // Chế độ xem chi tiết
+           let correctVal = String(item.dapAnDung).trim().toLowerCase(); 
+           
+           if (item.isCorrect) {
+               box.classList.add('correct-box'); 
+           } else if (userRadio) {
+               box.classList.add('wrong-box'); // Chỉ hiện khung đỏ nếu làm sai (có chọn)
+           }
+           
+           let labels = box.querySelectorAll('.opt-label'); 
+           labels.forEach(lbl => { 
+               let inp = lbl.querySelector('input'); 
+               let val = inp.value.trim().toLowerCase(); 
+               
+               if (val === correctVal) { 
+                   // Hiển thị đáp án đúng của hệ thống
+                   lbl.classList.add('lbl-correct'); 
+                   lbl.innerHTML += ' ✅'; 
+               } else { 
+                   if (userRadio && inp === userRadio) { 
+                       // Đánh dấu đáp án sai mà người dùng đã chọn
+                       lbl.classList.add('lbl-wrong'); 
+                       lbl.innerHTML += ' ❌'; 
+                   } else if (!userRadio) {
+                       // Nếu không chọn câu này, tô màu nhẹ để báo hiệu bỏ trống
+                       lbl.classList.add('lbl-yellow'); 
+                   } 
+               } 
+           }); 
+
+           // Hiển thị lời giải nếu có
+           if(item.giaiThich) { 
+               explainDiv.style.display = 'block'; 
+               let formattedExplain = app.formatText(item.giaiThich); 
+               explainDiv.innerHTML = `<b>Lời giải:</b> ${formattedExplain}`; 
+           } 
+       }
+    });
+
+    // Vẽ lại các công thức Toán học nếu có
+    if(window.MathJax) MathJax.typesetPromise();
+};
+
+app.startTimer = function(s) { if(app.timerInterval) clearInterval(app.timerInterval); app.timeLeft = s; let d = document.getElementById('quiz-timer'); let run = () => { let m=Math.floor(app.timeLeft/60), sec=app.timeLeft%60; d.innerText = `${m<10?'0'+m:m}:${sec<10?'0'+sec:sec}`; }; run(); app.timerInterval = setInterval(() => { app.timeLeft--; run(); if(app.timeLeft<=0) { clearInterval(app.timerInterval); alert("Hết giờ!"); app.submitQuiz(true); } }, 1000); };
+// --- SỬA HÀM QUAY LẠI TRANG CHỦ ---
+app.backToDash = function() {
+    // Kiểm tra xem có đang ở màn hình làm bài và chưa nộp bài không
+    // (View Quiz đang hiện VÀ Nút nộp bài đang hiện)
+    var isTakingQuiz = document.getElementById('view-quiz').style.display !== 'none' && 
+                       document.getElementById('btn-submit').style.display !== 'none';
+
+    if (isTakingQuiz) {
+        // Cảnh báo người dùng
+        var confirmAction = confirm("⚠️ CẢNH BÁO:\n\nBạn đang làm bài thi!\nNếu quay về Trang chủ lúc này, bài làm sẽ được TỰ ĐỘNG NỘP và tính điểm dựa trên các đáp án đã chọn.\n\nBạn có chắc chắn muốn tiếp tục?");
+        
+        if (confirmAction) {
+            // Thực hiện nộp bài ép buộc (force = true)
+            // Hàm này sẽ tự động chấm điểm và hiện kết quả
+            app.submitQuiz(true);
+        }
+        // Nếu chọn Cancel thì không làm gì cả, ở lại làm bài tiếp
+        return; 
+    }
+
+    // --- LOGIC CŨ (Chạy khi đã nộp bài xong hoặc không làm bài) ---
+    if(app.timerInterval) clearInterval(app.timerInterval);
+    app.disableAntiCheat();
+    
+    // Tải lại dữ liệu trang chủ để cập nhật điểm mới (nếu vừa thi xong)
+    app.loadDataAndRender(); 
+    app.showView('view-dashboard');
+    
+    // Reset lại trạng thái nút nộp bài cho lần sau
+    let btn = document.getElementById('btn-submit');
+    btn.innerText = "NỘP BÀI";
+    btn.disabled = false;
+    btn.style.opacity = "1";
+    btn.style.cursor = "pointer";
+};
+app.toggleHistory = function(btn) { let p = btn.parentElement.nextElementSibling; if(p.style.maxHeight){ p.style.maxHeight=null; btn.innerHTML=btn.innerHTML.replace('▲','▼'); } else { p.style.maxHeight=p.scrollHeight+"px"; btn.innerHTML=btn.innerHTML.replace('▼','▲'); } };
+app.enableAntiCheat = function() { app.violationCount = 0; document.addEventListener("visibilitychange", app.handleVisibilityChange); document.addEventListener("contextmenu", app.preventContextMenu); document.addEventListener("copy", app.preventCopy); document.addEventListener("cut", app.preventCopy); document.addEventListener("paste", app.preventCopy); document.body.classList.add("no-select"); };
+app.disableAntiCheat = function() { document.removeEventListener("visibilitychange", app.handleVisibilityChange); document.removeEventListener("contextmenu", app.preventContextMenu); document.removeEventListener("copy", app.preventCopy); document.removeEventListener("cut", app.preventCopy); document.removeEventListener("paste", app.preventCopy); document.body.classList.remove("no-select"); };
+app.handleVisibilityChange = function() { if (document.getElementById('view-quiz').style.display !== 'block') return; if (document.getElementById('btn-submit').style.display === 'none') return; if (document.hidden) { app.violationCount++; let remain = app.maxViolations - app.violationCount; if (remain > 0) { alert(`⚠️ CẢNH BÁO VI PHẠM!\n\nBạn đã rời khỏi màn hình làm bài.\nHệ thống ghi nhận vi phạm lần thứ: ${app.violationCount}.\n\nNếu vi phạm ${app.maxViolations} lần, bài thi sẽ TỰ ĐỘNG NỘP.`); } else { document.removeEventListener("visibilitychange", app.handleVisibilityChange); alert(`⛔ VI PHẠM QUÁ MỨC!\n\nBạn đã rời màn hình quá ${app.maxViolations} lần.\nHệ thống buộc phải thu bài ngay lập tức.`); app.submitQuiz(true); } } };
+app.preventContextMenu = function(e) { e.preventDefault(); return false; }; app.preventCopy = function(e) { e.preventDefault(); alert("Chức năng Copy/Paste bị vô hiệu hóa trong bài thi!"); return false; };
+</script>
