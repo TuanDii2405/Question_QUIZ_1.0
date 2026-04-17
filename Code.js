@@ -246,7 +246,9 @@ function xuLyChamDiem(baiLamUser, listID, maChuDe, userID, startTimeStr, violati
   if (currentTopic && currentTopic.timeEnd) { if (new Date() > new Date(new Date(currentTopic.timeEnd).getTime() + 60000)) return { success: false, msg: "Rất tiếc! Đã quá hạn nộp bài." }; } 
   var data = getData("CauHoi"); var results = []; var diem = 0; var logBaiLam = []; 
   for(var k=0; k < baiLamUser.length; k++) { var qID = listID[k]; var row = data[qID]; if(!row) continue; var questionData = getQuestionRowData(row, qID); if(!questionData) continue; var correctAns = normalizeTextCell(questionData.correctText); var isCorrect = (String(baiLamUser[k]).trim().toLowerCase() === correctAns.toLowerCase()); if(isCorrect) diem++; results.push({ isCorrect: isCorrect, dapAnDung: correctAns, giaiThich: questionData.explanation ? String(questionData.explanation) : "" }); logBaiLam.push({ q: questionData.question, a: baiLamUser[k], c: correctAns, ok: isCorrect }); } 
-  var viewMode = currentTopic.viewMode || "detail"; if (viewMode === "hidden") results = []; else if (viewMode === "score_only") results.forEach(r => { r.dapAnDung = ""; r.giaiThich = ""; }); 
+  // Guard: if topic was not found (deleted/renamed between load and submit), default to detail mode to ensure data is still saved
+  var viewMode = (currentTopic && currentTopic.viewMode) ? currentTopic.viewMode : "detail";
+  if (viewMode === "hidden") results = []; else if (viewMode === "score_only") results.forEach(r => { r.dapAnDung = ""; r.giaiThich = ""; }); 
   var now = new Date(); var start = new Date(startTimeStr); var diffMs = Math.max(0, now - start); var durationStr = Math.floor(diffMs / 60000) + " phút " + Math.floor((diffMs % 60000) / 1000) + " giây"; 
   var lock = LockService.getScriptLock(); 
   try { lock.waitLock(30000); var ss = SpreadsheetApp.openById(SPREADSHEET_ID); var sheet = ss.getSheetByName("DiemSo"); var tenChuDe = getTopicName(maChuDe); 

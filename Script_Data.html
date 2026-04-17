@@ -177,7 +177,7 @@ app.viewStats = function(id, name) {
     app.currentStatsID = id; 
     google.script.run.withSuccessHandler(res => { 
         let contentDiv = document.getElementById('stats-content'); 
-        if (!res.success) { contentDiv.innerHTML = res.msg; return; } 
+        if (!res.success) { contentDiv.innerHTML = `<p style='color:#dc2626; text-align:center'>⚠️ ${res.msg}</p>`; return; } 
         app.currentStatsData = res.list; 
         
         // Vẽ Chart và các box thống kê (giữ nguyên)
@@ -196,6 +196,8 @@ app.viewStats = function(id, name) {
         html += `</tbody></table></div>`; 
         contentDiv.innerHTML = html; 
         app.renderChart(res.spectrum); 
+    }).withFailureHandler(err => {
+        document.getElementById('stats-content').innerHTML = `<p style='color:#dc2626; text-align:center'>❌ Lỗi kết nối: ${err.message}</p>`;
     }).layThongKe(id); 
 };
 
@@ -226,11 +228,33 @@ app.reviewStudentExam = function(maChuDe, userID, displayName, lanThu) {
         }); 
         div.innerHTML = html; 
         if(window.MathJax) MathJax.typesetPromise(); 
+    }).withFailureHandler(err => {
+        btn.innerText = originalText;
+        btn.disabled = false;
+        alert("❌ Lỗi tải bài làm: " + err.message);
     }).layChiTietBaiLamHocSinh(maChuDe, userID, lanThu); 
 };
 
 app.renderChart = function(dataArray) { if(app.myChart) { app.myChart.destroy(); } var ctx = document.getElementById('scoreChart').getContext('2d'); var gradient = ctx.createLinearGradient(0, 0, 0, 400); gradient.addColorStop(0, 'rgba(37, 99, 235, 0.5)'); gradient.addColorStop(1, 'rgba(37, 99, 235, 0.0)'); app.myChart = new Chart(ctx, { type: 'line', data: { labels: ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10'], datasets: [{ label: 'Số lượng bài thi', data: dataArray, borderColor: '#2563eb', backgroundColor: gradient, borderWidth: 3, pointBackgroundColor: '#fff', pointBorderColor: '#2563eb', pointRadius: 5, pointHoverRadius: 7, fill: true, tension: 0.4 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: '#f3f4f6' } }, x: { grid: { display: false } } }, plugins: { title: { display: true, text: 'PHỔ ĐIỂM CHI TIẾT', font: {size: 14} }, legend: { display: false }, tooltip: { mode: 'index', intersect: false } }, interaction: { mode: 'nearest', axis: 'x', intersect: false } } }); };
-app.exportToExcel = function() { if(!app.currentStatsData || app.currentStatsData.length === 0) { alert("Không có dữ liệu!"); return; } let csvContent = "\uFEFFNgày nộp,Họ và tên,Lần thi,Số câu đúng,Tổng số câu,Điểm (thang 10),Thời gian làm bài,Số lần thoát tab\n"; app.currentStatsData.forEach(row => { csvContent += `${row.ngay},"${row.ten}",${row.lan},${row.diem},${row.tongCau},${row.diem10},"${row.tgLam}",${row.viPham}\n`; }); let encodedUri = encodeURI("data:text/csv;charset=utf-8," + csvContent); let link = document.createElement("a"); link.setAttribute("href", encodedUri); let fileName = app.currentStatsName ? app.currentStatsName.replace(/\s+/g, '_') : "Thong_ke"; link.setAttribute("download", `Ket_qua_${fileName}.csv`); document.body.appendChild(link); link.click(); document.body.removeChild(link); };
+app.exportToExcel = function() {
+  if(!app.currentStatsData || app.currentStatsData.length === 0) { alert("Không có dữ liệu!"); return; }
+  let csvContent = "\uFEFFNgày nộp,Họ và tên,Lần thi,Số câu đúng,Tổng số câu,Điểm (thang 10),Thời gian làm bài,Số lần thoát tab\n";
+  app.currentStatsData.forEach(row => {
+    let name = String(row.ten || '').replace(/"/g, '""');
+    let tgLam = String(row.tgLam || '').replace(/"/g, '""');
+    csvContent += `${row.ngay},"${name}",${row.lan},${row.diem},${row.tongCau},${row.diem10},"${tgLam}",${row.viPham}\n`;
+  });
+  let blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  let url = URL.createObjectURL(blob);
+  let link = document.createElement("a");
+  link.href = url;
+  let fileName = app.currentStatsName ? app.currentStatsName.replace(/\s+/g, '_') : "Thong_ke";
+  link.download = `Ket_qua_${fileName}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+};
 app.processExportPDF = function() { if(!app.currentStatsID) return; let btn = document.getElementById('btn-export-pdf'); let originalText = btn.innerHTML; btn.disabled = true; btn.innerHTML = "⏳ Đang tạo PDF..."; google.script.run.withSuccessHandler(res => { btn.disabled = false; btn.innerHTML = originalText; if(res.success) { const linkSource = `data:application/pdf;base64,${res.data}`; const downloadLink = document.createElement("a"); downloadLink.href = linkSource; downloadLink.download = res.filename; downloadLink.click(); } else { alert(res.msg); } }).xuatPDF(app.currentStatsID); };
 app.toggleHistory = function(btn) { let p = btn.parentElement.nextElementSibling; if(p.style.maxHeight){ p.style.maxHeight=null; btn.innerHTML=btn.innerHTML.replace('▲','▼'); } else { p.style.maxHeight=p.scrollHeight+"px"; btn.innerHTML=btn.innerHTML.replace('▼','▲'); } };
 </script>
