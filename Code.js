@@ -210,8 +210,8 @@ function luuCauHoiTrucTiep(maChuDe, listCauHoi, reqID, reqPass) {
       if (rowData && String(rowData.maChuDe).toLowerCase() === targetTopic.toLowerCase()) {
         seq++;
         var currentId = normalizeTextCell(rowData.id);
-        var m = currentId.match(/_(\d+)$/);
-        if (m) seq = Math.max(seq, parseInt(m[1], 10));
+        var idMatch = currentId.match(/_(\d+)$/);
+        if (idMatch) seq = Math.max(seq, parseInt(idMatch[1], 10));
       }
     }
     var dataToAppend = [];
@@ -226,7 +226,7 @@ function luuCauHoiTrucTiep(maChuDe, listCauHoi, reqID, reqPass) {
       var optionMap = { A: optA, B: optB, C: optC, D: optD, E: optE };
       if (!optionMap[correct]) return { success: false, msg: "Đáp án đúng không có nội dung. Vui lòng kiểm tra lại." };
       seq++;
-      var autoId = targetTopic + "_" + ("000" + seq).slice(-3);
+      var autoId = targetTopic + "_" + String(seq).padStart(3, "0");
       var qID = normalizeTextCell(item.id) || autoId;
       dataToAppend.push(["'" + qID, "'" + targetTopic, question, optA, optB, optC, optD, optE, correct, normalizeTextCell(item.explanation), item.createdAt || new Date().toISOString()]);
     }

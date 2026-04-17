@@ -1,7 +1,17 @@
 <script>
 app.qb = { questions: [], selectedIndex: -1, activeTab: 'current', topicId: '', topicName: '' };
 
-app.qbStorageKey = function() { return `qb_${app.accountID || 'guest'}_${app.qb.topicId || ''}`; };
+app.qbEscapeHtml = function(text) {
+  return String(text == null ? '' : text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/`/g, '&#96;');
+};
+app.qbStorageKey = function() { return `qb_${app.accountID || 'guest'}_${app.qb.topicId || 'default'}`; };
+app.qbRenderText = function(text) { return app.formatText(app.qbEscapeHtml(text)); };
 app.qbGetFormData = function() {
   const correctEl = document.querySelector('input[name="qb-correct"]:checked');
   return {
@@ -58,7 +68,7 @@ app.qbRenderTable = function() {
   let html = '';
   app.qb.questions.forEach((q, i) => {
     const active = i === app.qb.selectedIndex ? 'active' : '';
-    html += `<tr class="${active}" onclick="app.qbSelectRow(${i})"><td>${i + 1}</td><td>${(q.question || '').replace(/</g, '&lt;').slice(0, 100)}</td><td><b>${q.correctAnswer || ''}</b></td></tr>`;
+    html += `<tr class="${active}" onclick="app.qbSelectRow(${i})"><td>${i + 1}</td><td>${app.qbEscapeHtml(q.question || '').slice(0, 100)}</td><td><b>${app.qbEscapeHtml(q.correctAnswer || '')}</b></td></tr>`;
   });
   body.innerHTML = html;
 };
@@ -67,12 +77,12 @@ app.qbRenderCurrentPreview = function() {
   const formData = app.qbGetFormData();
   const opt = formData.options;
   const letters = ['A', 'B', 'C', 'D', 'E'];
-  let html = `<div style="padding:8px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:8px;"><div><b>Câu:</b> ${app.formatText(formData.question || '(trống)')}</div>`;
+  let html = `<div style="padding:8px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:8px;"><div><b>Câu:</b> ${app.qbRenderText(formData.question || '(trống)')}</div>`;
   letters.forEach(letter => {
-    if (opt[letter]) html += `<div style="margin-top:4px"><b>${letter}.</b> ${app.formatText(opt[letter])}</div>`;
+    if (opt[letter]) html += `<div style="margin-top:4px"><b>${letter}.</b> ${app.qbRenderText(opt[letter])}</div>`;
   });
-  html += `<div style="margin-top:6px; color:#0369a1">✅ Đáp án: <b>${formData.correctAnswer || '(chưa chọn)'}</b></div>`;
-  if (formData.explanation) html += `<div style="margin-top:6px; color:#166534"><b>Lời giải:</b> ${app.formatText(formData.explanation)}</div>`;
+  html += `<div style="margin-top:6px; color:#0369a1">✅ Đáp án: <b>${app.qbEscapeHtml(formData.correctAnswer || '(chưa chọn)')}</b></div>`;
+  if (formData.explanation) html += `<div style="margin-top:6px; color:#166534"><b>Lời giải:</b> ${app.qbRenderText(formData.explanation)}</div>`;
   html += `</div>`;
   return html;
 };
@@ -81,12 +91,12 @@ app.qbRenderAllPreview = function() {
   if (!app.qb.questions.length) return `<div style="color:#64748b">Chưa có câu hỏi đã thêm.</div>`;
   let html = '';
   app.qb.questions.forEach((q, i) => {
-    html += `<div style="padding:8px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:8px;"><div><b>Câu ${i + 1}:</b> ${app.formatText(q.question || '')}</div>`;
+    html += `<div style="padding:8px; background:#fff; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:8px;"><div><b>Câu ${i + 1}:</b> ${app.qbRenderText(q.question || '')}</div>`;
     ['A','B','C','D','E'].forEach(letter => {
-      if (q.options && q.options[letter]) html += `<div style="margin-top:3px"><b>${letter}.</b> ${app.formatText(q.options[letter])}</div>`;
+      if (q.options && q.options[letter]) html += `<div style="margin-top:3px"><b>${letter}.</b> ${app.qbRenderText(q.options[letter])}</div>`;
     });
-    html += `<div style="margin-top:5px; color:#0369a1">✅ Đáp án: <b>${q.correctAnswer || ''}</b></div>`;
-    if (q.explanation) html += `<div style="margin-top:5px; color:#166534"><b>Lời giải:</b> ${app.formatText(q.explanation)}</div>`;
+    html += `<div style="margin-top:5px; color:#0369a1">✅ Đáp án: <b>${app.qbEscapeHtml(q.correctAnswer || '')}</b></div>`;
+    if (q.explanation) html += `<div style="margin-top:5px; color:#166534"><b>Lời giải:</b> ${app.qbRenderText(q.explanation)}</div>`;
     html += `</div>`;
   });
   return html;
@@ -142,9 +152,10 @@ app.qbDeleteSelected = function() {
 app.qbExportJSON = function() {
   if (!app.qb.questions.length) { alert('Chưa có câu hỏi để export.'); return; }
   const data = JSON.stringify(app.qb.questions, null, 2);
+  const safeTopicId = String(app.qb.topicId || 'topic').replace(/[^a-zA-Z0-9_-]/g, '_');
   const link = document.createElement('a');
   link.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
-  link.download = `cauhoi_${app.qb.topicId || 'topic'}.json`;
+  link.download = `cauhoi_${safeTopicId}.json`;
   link.click();
 };
 
